@@ -11,8 +11,8 @@ android {
         applicationId "com.mangodrive.unlim"
         minSdk 24
         targetSdk 34
-        versionCode 6
-        versionName "6.0-Real-MTProto"
+        versionCode 7
+        versionName "7.0-Native-TDLib"
     }
 
     buildFeatures {
@@ -25,8 +25,7 @@ android {
             applicationIdSuffix ""
         }
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -50,6 +49,13 @@ android {
             assets.srcDirs = ['src/main/assets']
         }
     }
+
+    packagingOptions {
+        pickFirst 'lib/arm64-v8a/libtdjni.so'
+        pickFirst 'lib/armeabi-v7a/libtdjni.so'
+        pickFirst 'lib/x86_64/libtdjni.so'
+        pickFirst 'lib/x86/libtdjni.so'
+    }
 }
 
 preBuild.doFirst {
@@ -61,4 +67,6 @@ preBuild.doFirst {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
+    // مكتبة TDLib الأصلية المترجمة للأندرويد (Native C++ libtdjni.so + Client + TdApi)
+    implementation 'com.github.tdlibx:td:1.8.56'
 }
