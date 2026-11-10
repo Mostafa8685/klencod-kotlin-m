@@ -138,8 +138,10 @@ class MainActivity : Activity() {
     // 2 = شاشة إدخال كود التفعيل المرسل لتيليجرام (OTP Verification)
     private var authStep = 0
     private var pendingPhoneNumber = "+20"
-    private var generatedOtpCode = ""
-    private var qrSeedToken = UUID.randomUUID().toString().replace("-", "")
+    private var phoneCodeHashFromTelegram = ""
+    private var needsTwoFactorPassword = false
+    private var mtprotoStatusText = "جاري الاتصال بخوادم تيليجرام الرسمية (MTProto)..."
+    private var qrSeedToken = "tg://login"
 
     // التبويبات الثلاثة في Unlim:
     // 0 = Gallery (المعرض)، 1 = Files (الملفات)، 2 = Menu (القائمة)
@@ -241,7 +243,94 @@ class MainActivity : Activity() {
 
         applySystemBars()
         setupRootViews()
+        setupMtprotoBridgeListener()
+        TelegramMtprotoBridge.ensureInitialized(this)
+        val existingSession = TelegramCloudEngine.loadSession(this)
+        if (existingSession.isLoggedIn && existingSession.sessionString.isNotBlank()) {
+            TelegramMtprotoBridge.restoreSavedSession(this)
+        }
         refreshRootScreen()
+    }
+
+    private fun setupMtprotoBridgeListener() {
+        TelegramMtprotoBridge.attachListener(object : TelegramMtprotoBridge.Listener {
+            override fun onBridgeStatusChanged(status: String, message: String) {
+                mtprotoStatusText = message
+                if (status == "READY" && !TelegramCloudEngine.loadSession(this@MainActivity).isLoggedIn && authStep == 0) {
+                    val s = TelegramCloudEngine.loadSession(this@MainActivity)
+                    TelegramMtprotoBridge.startRealQrLogin(this@MainActivity, s.apiId, s.apiHash)
+                }
+            }
+
+            override fun onCodeSentSuccess(phoneCodeHash: String, viaApp: Boolean) {
+                hideLoadingOverlay()
+                phoneCodeHashFromTelegram = phoneCodeHash
+                needsTwoFactorPassword = false
+                authStep = 2
+                refreshRootScreen()
+                Toast.makeText(
+                    this@MainActivity,
+                    "تم إرسال كود الدخول الفعلي إلى حسابك في تطبيق تيليجرام الآن!",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            override fun onTwoFactorPasswordNeeded() {
+                hideLoadingOverlay()
+                needsTwoFactorPassword = true
+                authStep = 2
+                refreshRootScreen()
+                Toast.makeText(
+                    this@MainActivity,
+                    "حسابك محمي بالتحقق بخطوتين (2FA) — يرجى إدخال كلمة مرور تيليجرام السحابية",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            override fun onQrUrlReady(tgLoginUrl: String) {
+                qrSeedToken = tgLoginUrl
+                if (!TelegramCloudEngine.loadSession(this@MainActivity).isLoggedIn && authStep == 0) {
+                    refreshRootScreen()
+                }
+            }
+
+            override fun onAuthenticatedSuccess(sessionString: String, displayName: String, phone: String) {
+                hideLoadingOverlay()
+                Toast.makeText(
+                    this@MainActivity,
+                    "تم تسجيل الدخول الفعلي في تيليجرام ($displayName) وربط الرسائل المحفوظة!",
+                    Toast.LENGTH_LONG
+                ).show()
+                refreshRootScreen()
+            }
+
+            override fun onSavedMessagesLoaded(entries: List<TelegramCloudEngine.CloudFileEntry>) {
+                cloudFiles = entries.toMutableList()
+                if (TelegramCloudEngine.loadSession(this@MainActivity).isLoggedIn) {
+                    renderActiveTabContent()
+                }
+            }
+
+            override fun onUploadProgressChanged(percent: Int) {
+                showLoadingOverlay("جاري الرفع الفعلي إلى الرسائل المحفوظة في تيليجرام ($percent%)...")
+            }
+
+            override fun onUploadFinished(entry: TelegramCloudEngine.CloudFileEntry) {
+                hideLoadingOverlay()
+                cloudFiles = TelegramCloudEngine.loadCloudFiles(this@MainActivity)
+                renderActiveTabContent()
+                Toast.makeText(
+                    this@MainActivity,
+                    "تم رفع (${entry.name}) فعلياً إلى قسم الرسائل المحفوظة في حسابك على تيليجرام!",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            override fun onError(errorMessage: String) {
+                hideLoadingOverlay()
+                Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
+            }
+        })
     }
 
     private fun applySystemBars() {
@@ -262,6 +351,11 @@ class MainActivity : Activity() {
         rootFrame = FrameLayout(this).apply {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setBackgroundColor(bgMainColor)
+        }
+        loadingLayer = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(0x99000000.toInt())
+            isClickable = true
         }
         setContentView(rootFrame)
     }
@@ -289,6 +383,8 @@ class MainActivity : Activity() {
             1 -> buildPhoneLoginScreen(session)
             2 -> buildOtpCodeVerificationScreen(session)
         }
+        (loadingLayer.parent as? ViewGroup)?.removeView(loadingLayer)
+        rootFrame.addView(loadingLayer)
     }
 
     /**
@@ -333,13 +429,13 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(18), dp(18), dp(18))
             layoutParams = LinearLayout.LayoutParams(dp(240), dp(240))
             setOnClickListener {
-                qrSeedToken = UUID.randomUUID().toString().replace("-", "")
-                refreshRootScreen()
-                Toast.makeText(this@MainActivity, "تم تحديث رمز QR للربط السحابي", Toast.LENGTH_SHORT).show()
+                val s = TelegramCloudEngine.loadSession(this@MainActivity)
+                TelegramMtprotoBridge.startRealQrLogin(this@MainActivity, s.apiId, s.apiHash)
+                Toast.makeText(this@MainActivity, "جاري توليد رمز QR رسمي جديد من تيليجرام...", Toast.LENGTH_SHORT).show()
             }
         }
 
-        val qrView = QrCodeCanvasView(this, "tg://login?token=$qrSeedToken").apply {
+        val qrView = QrCodeCanvasView(this, qrSeedToken).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -395,16 +491,10 @@ class MainActivity : Activity() {
 
     private fun openTelegramAppOrFallbackToPhone() {
         try {
-            val tgIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve"))
+            val urlToOpen = if (qrSeedToken.startsWith("tg://")) qrSeedToken else "tg://resolve"
+            val tgIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlToOpen))
             tgIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(tgIntent)
-            Toast.makeText(
-                this,
-                "تم فتح تيليجرام — يمكنك الآن إدخال رقم هاتفك لاستلام كود الربط السحابي",
-                Toast.LENGTH_LONG
-            ).show()
-            authStep = 1
-            refreshRootScreen()
         } catch (_: Throwable) {
             authStep = 1
             refreshRootScreen()
@@ -527,13 +617,14 @@ class MainActivity : Activity() {
             )
         }
 
-        val botTokenInput = EditText(this).apply {
-            hint = "Bot Token (اختياري لإرسال الكود والرفع عبر بوتك)"
+        val apiIdInput = EditText(this).apply {
+            hint = "Telegram API ID (الافتراضي: 2040)"
             setHintTextColor(textSecondaryColor)
             setTextColor(textPrimaryColor)
             textSize = 13.5f
+            inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine(true)
-            setText(session.botToken)
+            setText(session.apiId)
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = roundedBg(bgCardColor, 14f)
             layoutParams = LinearLayout.LayoutParams(
@@ -542,13 +633,13 @@ class MainActivity : Activity() {
             ).apply { bottomMargin = dp(8) }
         }
 
-        val chatIdInput = EditText(this).apply {
-            hint = "Chat ID (معرف حسابك أو قناتك الخاصة في تيليجرام)"
+        val apiHashInput = EditText(this).apply {
+            hint = "Telegram API Hash (من my.telegram.org)"
             setHintTextColor(textSecondaryColor)
             setTextColor(textPrimaryColor)
             textSize = 13.5f
             setSingleLine(true)
-            setText(if (session.targetChatId == "Saved Messages") "" else session.targetChatId)
+            setText(session.apiHash)
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = roundedBg(bgCardColor, 14f)
             layoutParams = LinearLayout.LayoutParams(
@@ -557,11 +648,11 @@ class MainActivity : Activity() {
             )
         }
 
-        advancedContainer.addView(botTokenInput)
-        advancedContainer.addView(chatIdInput)
+        advancedContainer.addView(apiIdInput)
+        advancedContainer.addView(apiHashInput)
 
         val toggleAdvancedTv = TextView(this).apply {
-            text = "⚙️ خيارات الربط المتقدم (Bot Token / Chat ID - اختياري)"
+            text = "⚙️ إعدادات API ID / API Hash المخصصة (مضبوطة تلقائياً)"
             setTextColor(textSecondaryColor)
             textSize = 12.5f
             setPadding(0, dp(14), 0, dp(4))
@@ -575,7 +666,7 @@ class MainActivity : Activity() {
         container.addView(advancedContainer)
 
         val sendCodeBtn = TextView(this).apply {
-            text = "إرسال كود التسجيل على تيليجرام"
+            text = "إرسال كود التسجيل الحقيقي على تيليجرام"
             setTextColor(Color.WHITE)
             textSize = 15.5f
             typeface = Typeface.DEFAULT_BOLD
@@ -588,32 +679,30 @@ class MainActivity : Activity() {
             ).apply { topMargin = dp(28) }
             setOnClickListener {
                 val enteredPhone = phoneInput.text?.toString()?.trim().orEmpty()
-                if (enteredPhone.length < 7) {
-                    Toast.makeText(this@MainActivity, "يرجى إدخال رقم هاتفك المرتبط بتيليجرام بشكل صحيح", Toast.LENGTH_SHORT).show()
+                if (enteredPhone.length < 8 || !enteredPhone.startsWith("+")) {
+                    Toast.makeText(this@MainActivity, "يرجى إدخال رقم الهاتف مع مفتاح الدولة (مثال: +2010...)", Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
                 pendingPhoneNumber = enteredPhone
-                val bTok = botTokenInput.text?.toString()?.trim().orEmpty()
-                val cId = chatIdInput.text?.toString()?.trim().orEmpty().ifEmpty { "Saved Messages" }
+                val customApiId = apiIdInput.text?.toString()?.trim().orEmpty().ifEmpty { "2040" }
+                val customApiHash = apiHashInput.text?.toString()?.trim().orEmpty().ifEmpty { "b18441a1ff607e10a989891a5462e627" }
 
                 TelegramCloudEngine.saveSession(
                     this@MainActivity,
                     session.copy(
                         phoneNumber = enteredPhone,
-                        botToken = bTok,
-                        targetChatId = cId
+                        apiId = customApiId,
+                        apiHash = customApiHash
                     )
                 )
 
-                ioPool.execute {
-                    val (code, msg) = TelegramCloudEngine.requestTelegramLoginCodeBlocking(enteredPhone, bTok, cId)
-                    generatedOtpCode = code
-                    handler.post {
-                        authStep = 2
-                        refreshRootScreen()
-                        Toast.makeText(this@MainActivity, "$msg (كود تيليجرام: $code)", Toast.LENGTH_LONG).show()
-                    }
-                }
+                showLoadingOverlay("جاري إرسال طلب الكود الرسمي إلى خوادم تيليجرام للرقم $enteredPhone...")
+                TelegramMtprotoBridge.requestRealLoginCode(
+                    this@MainActivity,
+                    enteredPhone,
+                    customApiId,
+                    customApiHash
+                )
             }
         }
 
@@ -650,34 +739,33 @@ class MainActivity : Activity() {
             )
         }
 
-        // شريط إشعار رسالة تيليجرام العلوية لعرض الكود المرسل
-        val tgNotificationBanner = LinearLayout(this).apply {
+        val infoBanner = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(12))
             background = roundedBg(bgTealCircleColor, 16f, accentCyanColor, 1f)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(26) }
+            ).apply { bottomMargin = dp(24) }
         }
 
         val bannerTitle = TextView(this).apply {
-            text = "💬 رسالة تيليجرام (Telegram Login Code)"
+            text = "💬 افتح تطبيق تيليجرام الآن"
             setTextColor(accentCyanColor)
-            textSize = 13f
+            textSize = 13.5f
             typeface = Typeface.DEFAULT_BOLD
         }
         val bannerBody = TextView(this).apply {
-            text = "كود الدخول الخاص بك في مانجو درايف (Unlim Cloud) هو: $generatedOtpCode — اضغط هنا لنسخه تلقائياً"
+            text = "وصلتك الآن رسالة رسمية من خدمة Telegram تحتوي على كود الدخول المكون من 5 أرقام. أدخل الكود بالأسفل لربط الرسائل المحفوظة (Saved Messages)."
             setTextColor(textPrimaryColor)
-            textSize = 13f
+            textSize = 12.5f
             setPadding(0, dp(4), 0, 0)
         }
-        tgNotificationBanner.addView(bannerTitle)
-        tgNotificationBanner.addView(bannerBody)
+        infoBanner.addView(bannerTitle)
+        infoBanner.addView(bannerBody)
 
         val titleTv = TextView(this).apply {
-            text = "أدخل كود تيليجرام"
+            text = if (needsTwoFactorPassword) "كلمة مرور التحقق بخطوتين (2FA)" else "أدخل كود تيليجرام الرسمي"
             setTextColor(textPrimaryColor)
             textSize = 21f
             typeface = Typeface.DEFAULT_BOLD
@@ -685,38 +773,50 @@ class MainActivity : Activity() {
         }
 
         val subTv = TextView(this).apply {
-            text = "لقد أرسلنا كود التفعيل المكون من 5 أرقام إلى تطبيق تيليجرام على الرقم ($pendingPhoneNumber)"
+            text = "الحساب: $pendingPhoneNumber"
             setTextColor(textSecondaryColor)
             textSize = 14f
             gravity = Gravity.CENTER
-            setPadding(dp(8), dp(10), dp(8), dp(24))
+            setPadding(dp(8), dp(8), dp(8), dp(20))
         }
 
         val otpInput = EditText(this).apply {
-            hint = "• • • • •"
+            hint = "كود تيليجرام (5 أرقام)"
             setHintTextColor(textSecondaryColor)
             setTextColor(accentCyanColor)
-            textSize = 24f
+            textSize = 22f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             inputType = InputType.TYPE_CLASS_NUMBER
             filters = arrayOf(InputFilter.LengthFilter(6))
             setSingleLine(true)
-            setPadding(dp(20), dp(16), dp(20), dp(16))
+            setPadding(dp(20), dp(15), dp(20), dp(15))
             background = roundedBg(bgCardColor, 18f, accentCyanColor, 1.5f)
+            visibility = if (needsTwoFactorPassword) View.GONE else View.VISIBLE
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(12) }
+        }
+
+        val twoFaInput = EditText(this).apply {
+            hint = "كلمة مرور التحقق بخطوتين (إن وجدت)"
+            setHintTextColor(textSecondaryColor)
+            setTextColor(textPrimaryColor)
+            textSize = 16f
+            gravity = Gravity.CENTER
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+            setPadding(dp(18), dp(14), dp(18), dp(14))
+            background = roundedBg(bgCardColor, 16f, accentCyanColor, 1.2f)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
         }
 
-        tgNotificationBanner.setOnClickListener {
-            otpInput.setText(generatedOtpCode)
-            otpInput.setSelection(generatedOtpCode.length)
-        }
-
         val verifyBtn = TextView(this).apply {
-            text = "تأكيد الكود وربط السحابة"
+            text = "تأكيد الدخول وفتح الرسائل المحفوظة"
             setTextColor(Color.WHITE)
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
@@ -726,43 +826,47 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(28) }
+            ).apply { topMargin = dp(24) }
             setOnClickListener {
-                val entered = otpInput.text?.toString()?.trim().orEmpty()
-                if (entered.length < 4) {
-                    Toast.makeText(this@MainActivity, "يرجى إدخال كود التفعيل المرسل إلى تيليجرام", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
+                val codeVal = otpInput.text?.toString()?.trim().orEmpty()
+                val passVal = twoFaInput.text?.toString() ?: ""
+
+                if (needsTwoFactorPassword) {
+                    if (passVal.isEmpty()) {
+                        Toast.makeText(this@MainActivity, "يرجى إدخال كلمة مرور التحقق بخطوتين", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    showLoadingOverlay("جاري التحقق من كلمة المرور السحابية وربط Saved Messages...")
+                    TelegramMtprotoBridge.submitRealTwoFactorPassword(passVal)
+                } else {
+                    if (codeVal.length < 5) {
+                        Toast.makeText(this@MainActivity, "يرجى إدخال الكود المكون من 5 أرقام المرسل إلى تيليجرام", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    showLoadingOverlay("جاري تأكيد الكود مع خادم تيليجرام وفتح الرسائل المحفوظة...")
+                    TelegramMtprotoBridge.verifyRealPhoneCode(codeVal, passVal)
                 }
-                val updated = TelegramCloudEngine.loadSession(this@MainActivity).copy(
-                    isLoggedIn = true,
-                    phoneNumber = pendingPhoneNumber
-                )
-                TelegramCloudEngine.saveSession(this@MainActivity, updated)
-                Toast.makeText(
-                    this@MainActivity,
-                    "تم ربط حساب تيليجرام بنجاح! لديك الآن مساحة تخزين سحابية غير محدودة في Saved Messages",
-                    Toast.LENGTH_LONG
-                ).show()
-                refreshRootScreen()
             }
         }
 
         val changePhoneBtn = TextView(this).apply {
-            text = "تغيير رقم الهاتف"
+            text = "إعادة إرسال الكود أو تغيير الرقم"
             setTextColor(accentCyanColor)
             textSize = 14f
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(18), dp(12), dp(12))
             setOnClickListener {
+                needsTwoFactorPassword = false
                 authStep = 1
                 refreshRootScreen()
             }
         }
 
-        container.addView(tgNotificationBanner)
+        container.addView(infoBanner)
         container.addView(titleTv)
         container.addView(subTv)
         container.addView(otpInput)
+        container.addView(twoFaInput)
         container.addView(verifyBtn)
         container.addView(changePhoneBtn)
         rootFrame.addView(container)
@@ -1225,7 +1329,8 @@ class MainActivity : Activity() {
                         cloudFolders = TelegramCloudEngine.loadFolders(this)
                         cloudFiles = TelegramCloudEngine.loadCloudFiles(this)
                         renderActiveTabContent()
-                        Toast.makeText(this, "تمت مزامنة المجلدات مع Saved Messages", Toast.LENGTH_SHORT).show()
+                        TelegramMtprotoBridge.syncSavedMessages()
+                        Toast.makeText(this, "جاري مزامنة الملفات الحقيقية من الرسائل المحفوظة في تيليجرام...", Toast.LENGTH_SHORT).show()
                     }
                 }
                 true
@@ -1593,6 +1698,7 @@ class MainActivity : Activity() {
                         }
                     }
                     3 -> {
+                        if (file.telegramMessageId > 0L) TelegramMtprotoBridge.deleteMessageFromSavedMessages(file.telegramMessageId)
                         cloudFiles.removeAll { it.id == file.id }
                         TelegramCloudEngine.saveCloudFiles(this, cloudFiles)
                         renderActiveTabContent()
@@ -2111,14 +2217,27 @@ class MainActivity : Activity() {
     }
 
     private fun uploadUriToUnlimCloud(uri: Uri, targetFolder: String) {
-        showLoadingOverlay("جاري الرفع إلى سحابة تيليجرام (Saved Messages)...")
-        ioPool.execute {
-            val (_, msg) = TelegramCloudEngine.uploadUriToSavedMessagesBlocking(this, uri, targetFolder)
-            handler.post {
-                hideLoadingOverlay()
-                cloudFiles = TelegramCloudEngine.loadCloudFiles(this)
-                renderActiveTabContent()
-                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+        val s = TelegramCloudEngine.loadSession(this)
+        if (s.sessionString.isNotBlank()) {
+            showLoadingOverlay("جاري الرفع الفعلي إلى الرسائل المحفوظة (Saved Messages) في تيليجرام...")
+            ioPool.execute {
+                TelegramMtprotoBridge.uploadUriToRealSavedMessages(
+                    ctx = this,
+                    uri = uri,
+                    folderPath = targetFolder,
+                    localUriStr = uri.toString()
+                )
+            }
+        } else {
+            showLoadingOverlay("جاري الرفع إلى سحابة تيليجرام (Saved Messages)...")
+            ioPool.execute {
+                val (_, msg) = TelegramCloudEngine.uploadUriToSavedMessagesBlocking(this, uri, targetFolder)
+                handler.post {
+                    hideLoadingOverlay()
+                    cloudFiles = TelegramCloudEngine.loadCloudFiles(this)
+                    renderActiveTabContent()
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                }
             }
         }
     }

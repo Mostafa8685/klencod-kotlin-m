@@ -11,8 +11,8 @@ android {
         applicationId "com.mangodrive.unlim"
         minSdk 24
         targetSdk 34
-        versionCode 5
-        versionName "5.0-Unlim-Arabic"
+        versionCode 6
+        versionName "6.0-Real-MTProto"
     }
 
     buildFeatures {

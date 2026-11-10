@@ -63,6 +63,7 @@ object TelegramCloudEngine {
 
     data class UnlimSession(
         val isLoggedIn: Boolean,
+        val sessionString: String = "",
         val phoneNumber: String,
         val userName: String,
         val apiId: String,
@@ -79,6 +80,7 @@ object TelegramCloudEngine {
         val p = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return UnlimSession(
             isLoggedIn = p.getBoolean("is_logged_in", false),
+            sessionString = p.getString("mtproto_session_str", "") ?: "",
             phoneNumber = p.getString("phone_number", "") ?: "",
             userName = p.getString("user_name", "مستخدم تيليجرام") ?: "مستخدم تيليجرام",
             apiId = p.getString("api_id", "2040") ?: "2040",
@@ -95,6 +97,7 @@ object TelegramCloudEngine {
     fun saveSession(ctx: Context, s: UnlimSession) {
         ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putBoolean("is_logged_in", s.isLoggedIn)
+            .putString("mtproto_session_str", s.sessionString)
             .putString("phone_number", s.phoneNumber.trim())
             .putString("user_name", s.userName.trim())
             .putString("api_id", s.apiId.trim())
@@ -110,7 +113,7 @@ object TelegramCloudEngine {
 
     fun logout(ctx: Context) {
         val current = loadSession(ctx)
-        saveSession(ctx, current.copy(isLoggedIn = false))
+        saveSession(ctx, current.copy(isLoggedIn = false, sessionString = ""))
     }
 
     /**
@@ -274,7 +277,7 @@ object TelegramCloudEngine {
         return list
     }
 
-    private fun recordTransfer(ctx: Context, rec: TransferRecord) {
+    fun recordTransferPublic(ctx: Context, rec: TransferRecord) {
         val list = loadTransfers(ctx)
         list.add(0, rec)
         val arr = JSONArray()
@@ -372,7 +375,7 @@ object TelegramCloudEngine {
         current.add(0, entry)
         saveCloudFiles(ctx, current)
 
-        recordTransfer(
+        recordTransferPublic(
             ctx,
             TransferRecord(
                 id = UUID.randomUUID().toString(),

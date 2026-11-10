@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mango Drive MTProto Bridge</title>
+</head>
+<body>
+<script type="module">
+  // Global state for MTProto client and chunked file transfers
+  window.mtState = {
+    ready: false,
+    TelegramClient: null,
+    StringSession: null,
+    Api: null,
+    CustomFile: null,
+    Buffer: null,
+    client: null,
+    apiId: 2040,
+    apiHash: "b18441a1ff607e10a989891a5462e627",
+    phoneNumber: "",
+    phoneCodeHash: "",
+    uploadChunks: [],
+    uploadFileName: "",
+    uploadMimeType: "",
+    uploadFolderPath: "",
+    pendingPasswordResolve: null
+  };
+
+  function notifyStatus(status, detail) {
+    try {
+      if (window.AndroidBridge && window.AndroidBridge.onBridgeStatus) {
+        window.AndroidBridge.onBridgeStatus(String(status), String(detail || ""));
+      }
+    } catch (e) {
+      console.error("notifyStatus error", e);
+    }
+  }
+
+  function notifyError(err) {
+    const msg = (err && (err.errorMessage || err.message)) ? (err.errorMessage || err.message) : String(err);
+    try {
+      if (window.AndroidBridge && window.AndroidBridge.onMtprotoError) {
+        window.AndroidBridge.onMtprotoError(String(msg));
+      }
+    } catch (e) {
+      console.error("notifyError", e);
+    }
+  }
+
+  async function loadMtprotoLibrary() {
+    notifyStatus("CONNECTING", "جاري تحميل محرك تيليجرام الرسمي (MTProto)...");
+    try {
+      const bufMod = await import("https://esm.sh/buffer@6.0.3?bundle");
+      window.Buffer = bufMod.Buffer || (bufMod.default && bufMod.default.Buffer);
+      window.mtState.Buffer = window.Buffer;
+      if (typeof globalThis.Buffer === "undefined") {
+        globalThis.Buffer = window.Buffer;
+      }
+    } catch (e) {
+      console.warn("Buffer polyfill warning:", e);
+    }
+
+    const cdnCandidates = [
+      "https://esm.sh/telegram@2.26.22?bundle",
+      "https://cdn.jsdelivr.net/npm/@futpib/telegram-browser@2.9.4-dev.1/+esm",
+      "https://esm.sh/teleproto@1.229.0?bundle"
+    ];
+
+    let loadedMod = null;
+    let lastErr = null;
+    for (const url of cdnCandidates) {
+      try {
+        loadedMod = await import(url);
+        if (loadedMod && (loadedMod.TelegramClient || (loadedMod.default && loadedMod.default.TelegramClient))) {
+          break;
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    if (!loadedMod) {
+      notifyStatus("ERROR", "تعذر تحميل مكتبة MTProto — تحقق من اتصال الإنترنت: " + String(lastErr || ""));
+      return;
+    }
+
+    const root = (loadedMod.TelegramClient) ? loadedMod : (loadedMod.default || loadedMod);
+    window.mtState.TelegramClient = root.TelegramClient;
+    window.mtState.Api = root.Api;
+    window.mtState.StringSession = (root.sessions && root.sessions.StringSession) ? root.sessions.StringSession : null;
+    window.mtState.CustomFile = (root.client && root.client.uploads && root.client.uploads.CustomFile)
+      ? root.client.uploads.CustomFile
+      : null;
+
+    if (!window.mtState.StringSession) {
+      try {
+        const sessMod = await import("https://esm.sh/telegram@2.26.22/sessions?bundle");
+        window.mtState.StringSession = sessMod.StringSession || (sessMod.default && sessMod.default.StringSession);
+      } catch (e) {}
+    }
+
+    if (!window.mtState.CustomFile) {
+      try {
+        const upMod = await import("https://esm.sh/telegram@2.26.22/client/uploads?bundle");
+        window.mtState.CustomFile = upMod.CustomFile || (upMod.default && upMod.default.CustomFile);
+      } catch (e) {}
+    }
+
+    window.mtState.ready = true;
+    notifyStatus("READY", "متصل بخوادم تيليجرام الرسمية (MTProto جاهز)");
+  }
+
+  async function ensureClient(sessionString, apiId, apiHash) {
+    if (!window.mtState.ready) {
+      await loadMtprotoLibrary();
+    }
+    if (!window.mtState.TelegramClient || !window.mtState.StringSession) {
+      throw new Error("محرك MTProto غير جاهز بعد، تأكد من اتصال الإنترنت");
+    }
+    const numApiId = Number(apiId) || 2040;
+    const strApiHash = String(apiHash || "b18441a1ff607e10a989891a5462e627").trim();
+    window.mtState.apiId = numApiId;
+    window.mtState.apiHash = strApiHash;
+
+    if (!window.mtState.client) {
+      const sess = new window.mtState.StringSession(String(sessionString || ""));
+      window.mtState.client = new window.mtState.TelegramClient(sess, numApiId, strApiHash, {
+        connectionRetries: 5,
+        useWSS: true
+      });
+    }
+    if (!window.mtState.client.connected) {
+      await window.mtState.client.connect();
+    }
+    return window.mtState.client;
+  }
+
+  // 1. Restore existing session and fetch Saved Messages
+  window.mtRestoreSession = async function(sessionString, apiId, apiHash) {
+    try {
+      const client = await ensureClient(sessionString, apiId, apiHash);
+      const authorized = await client.checkAuthorization();
+      if (authorized) {
+        const me = await client.getMe();
+        const savedSess = client.session.save();
+        window.AndroidBridge.onLoginSuccess(
+          String(savedSess || sessionString),
+          String((me && (me.firstName || me.username)) || "مستخدم تيليجرام"),
+          String((me && me.phone) || "")
+        );
+        await window.mtFetchSavedMessages();
+      } else {
+        notifyStatus("UNAUTHORIZED", "يرجى تسجيل الدخول بحساب تيليجرام");
+      }
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // 2. Request REAL login code from Telegram servers (auth.sendCode)
+  window.mtSendLoginCode = async function(phoneNumber, apiId, apiHash) {
+    try {
+      notifyStatus("SENDING_CODE", "جاري الاتصال بخادم تيليجرام لإرسال الكود للرقم " + phoneNumber + "...");
+      // Always create a fresh client when starting phone auth
+      window.mtState.client = null;
+      const client = await ensureClient("", apiId, apiHash);
+      window.mtState.phoneNumber = String(phoneNumber).trim();
+
+      const result = await client.sendCode(
+        { apiId: window.mtState.apiId, apiHash: window.mtState.apiHash },
+        window.mtState.phoneNumber
+      );
+      window.mtState.phoneCodeHash = result.phoneCodeHash;
+      window.AndroidBridge.onCodeSentToTelegram(
+        String(result.phoneCodeHash),
+        Boolean(result.isCodeViaApp)
+      );
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // 3. Verify REAL 5-digit Telegram code (auth.signIn)
+  window.mtVerifyPhoneCode = async function(phoneCode, twoFaPassword) {
+    try {
+      const client = window.mtState.client;
+      if (!client) {
+        throw new Error("انتهت جلسة الاتصال، أعد إرسال الكود من فضلك");
+      }
+      const Api = window.mtState.Api;
+      const cleanCode = String(phoneCode || "").trim();
+
+      try {
+        const signInRes = await client.invoke(
+          new Api.auth.SignIn({
+            phoneNumber: window.mtState.phoneNumber,
+            phoneCodeHash: window.mtState.phoneCodeHash,
+            phoneCode: cleanCode
+          })
+        );
+        if (client.session && client.session.processEntities) {
+          client.session.processEntities(signInRes);
+        }
+      } catch (signInErr) {
+        const errStr = String(signInErr.errorMessage || signInErr.message || signInErr);
+        if (errStr.includes("SESSION_PASSWORD_NEEDED")) {
+          if (!twoFaPassword || String(twoFaPassword).trim().length === 0) {
+            window.AndroidBridge.onTwoFactorPasswordNeeded();
+            return;
+          }
+          await client.signInWithPassword(
+            { apiId: window.mtState.apiId, apiHash: window.mtState.apiHash },
+            {
+              password: async () => String(twoFaPassword),
+              onError: (e) => { throw e; }
+            }
+          );
+        } else {
+          throw signInErr;
+        }
+      }
+
+      const me = await client.getMe();
+      const savedSession = client.session.save();
+      window.AndroidBridge.onLoginSuccess(
+        String(savedSession),
+        String((me && (me.firstName || me.username)) || "حساب تيليجرام"),
+        String((me && me.phone) || window.mtState.phoneNumber)
+      );
+      await window.mtFetchSavedMessages();
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // 4. Submit 2FA Password if requested after code
+  window.mtSubmitTwoFactorPassword = async function(twoFaPassword) {
+    try {
+      const client = window.mtState.client;
+      if (!client) throw new Error("الاتصال غير نشط");
+      if (window.mtState.pendingPasswordResolve) {
+        window.mtState.pendingPasswordResolve(String(twoFaPassword));
+        window.mtState.pendingPasswordResolve = null;
+        return;
+      }
+      await client.signInWithPassword(
+        { apiId: window.mtState.apiId, apiHash: window.mtState.apiHash },
+        {
+          password: async () => String(twoFaPassword),
+          onError: (e) => { throw e; }
+        }
+      );
+      const me = await client.getMe();
+      const savedSession = client.session.save();
+      window.AndroidBridge.onLoginSuccess(
+        String(savedSession),
+        String((me && (me.firstName || me.username)) || "حساب تيليجرام"),
+        String((me && me.phone) || window.mtState.phoneNumber)
+      );
+      await window.mtFetchSavedMessages();
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // 5. Real QR Code Login (signInUserWithQrCode -> tg://login?token=...)
+  window.mtStartQrLogin = async function(apiId, apiHash) {
+    try {
+      window.mtState.client = null;
+      const client = await ensureClient("", apiId, apiHash);
+      const user = await client.signInUserWithQrCode(
+        { apiId: window.mtState.apiId, apiHash: window.mtState.apiHash },
+        {
+          qrCode: async (code) => {
+            const bytes = new Uint8Array(code.token);
+            let bin = "";
+            for (let i = 0; i < bytes.length; i++) {
+              bin += String.fromCharCode(bytes[i]);
+            }
+            const b64url = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            window.AndroidBridge.onQrLoginUrlGenerated("tg://login?token=" + b64url);
+          },
+          password: async (hint) => {
+            window.AndroidBridge.onTwoFactorPasswordNeeded();
+            return await new Promise((resolve) => {
+              window.mtState.pendingPasswordResolve = resolve;
+            });
+          },
+          onError: async (err) => {
+            notifyError(err);
+            return false;
+          }
+        }
+      );
+      if (user) {
+        const savedSession = client.session.save();
+        window.AndroidBridge.onLoginSuccess(
+          String(savedSession),
+          String(user.firstName || user.username || "حساب تيليجرام"),
+          String(user.phone || "")
+        );
+        await window.mtFetchSavedMessages();
+      }
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // 6. Fetch REAL files & media stored in Telegram 'Saved Messages' ("me")
+  window.mtFetchSavedMessages = async function() {
+    try {
+      const client = window.mtState.client;
+      if (!client) return;
+      const messages = await client.getMessages("me", { limit: 80 });
+      const items = [];
+
+      for (const msg of messages) {
+        if (!msg || !msg.id) continue;
+        const caption = String(msg.message || "");
+        let folderPath = "";
+        const pathMatch = caption.match(/Path:\s*\/Files\/([^\s|]+)/i);
+        if (pathMatch && pathMatch[1]) {
+          folderPath = pathMatch[1].trim();
+        }
+
+        let fileName = "";
+        let sizeBytes = 0;
+        let mimeType = "application/octet-stream";
+        let isMedia = false;
+        let isImageOrVideo = false;
+        let isVideo = false;
+
+        if (msg.document) {
+          isMedia = true;
+          mimeType = String(msg.document.mimeType || "application/octet-stream");
+          sizeBytes = Number(msg.document.size || 0);
+          if (Array.isArray(msg.document.attributes)) {
+            for (const attr of msg.document.attributes) {
+              if (attr && attr.fileName) {
+                fileName = String(attr.fileName);
+              }
+            }
+          }
+          if (!fileName) {
+            fileName = "ملف_تيليجرام_" + msg.id;
+          }
+          const lowMime = mimeType.toLowerCase();
+          const lowName = fileName.toLowerCase();
+          isVideo = lowMime.startsWith("video/") || lowName.endsWith(".mp4") || lowName.endsWith(".mkv") || lowName.endsWith(".mov");
+          const isImg = lowMime.startsWith("image/") || lowName.endsWith(".jpg") || lowName.endsWith(".jpeg") || lowName.endsWith(".png") || lowName.endsWith(".webp");
+          isImageOrVideo = isImg || isVideo;
+        } else if (msg.photo) {
+          isMedia = true;
+          isImageOrVideo = true;
+          isVideo = false;
+          mimeType = "image/jpeg";
+          fileName = "صورة_تيليجرام_" + msg.id + ".jpg";
+          sizeBytes = 524288;
+        }
+
+        if (isMedia) {
+          items.push({
+            id: "tg_" + msg.id,
+            name: fileName,
+            sizeBytes: sizeBytes,
+            mimeType: mimeType,
+            folderPath: folderPath,
+            isImageOrVideo: isImageOrVideo,
+            isVideo: isVideo,
+            telegramMessageId: Number(msg.id),
+            uploadedAt: Number(msg.date || Math.floor(Date.now() / 1000)) * 1000
+          });
+        }
+      }
+
+      window.AndroidBridge.onSavedMessagesSynced(JSON.stringify(items));
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // 7. Chunked upload from Android Kotlin -> Real Telegram 'Saved Messages' ("me")
+  window.mtBeginFileUpload = function(fileName, mimeType, folderPath) {
+    window.mtState.uploadChunks = [];
+    window.mtState.uploadFileName = String(fileName || "file");
+    window.mtState.uploadMimeType = String(mimeType || "application/octet-stream");
+    window.mtState.uploadFolderPath = String(folderPath || "");
+  };
+
+  window.mtAppendFileChunk = function(b64Chunk) {
+    if (b64Chunk && b64Chunk.length > 0) {
+      window.mtState.uploadChunks.push(b64Chunk);
+    }
+  };
+
+  window.mtCommitFileUpload = async function() {
+    try {
+      const client = window.mtState.client;
+      if (!client) {
+        throw new Error("غير متصل بحساب تيليجرام، يرجى تسجيل الدخول أولاً");
+      }
+      const fullB64 = window.mtState.uploadChunks.join("");
+      window.mtState.uploadChunks = [];
+
+      const binaryStr = atob(fullB64);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const fileName = window.mtState.uploadFileName;
+      const folderPath = window.mtState.uploadFolderPath;
+      const pathTag = folderPath ? ("/Files/" + folderPath) : "/Files";
+      const caption = "UnlimCloud | Path: " + pathTag + " | File: " + fileName;
+
+      let fileToUpload = null;
+      const BufClass = window.mtState.Buffer || window.Buffer;
+      const fileBuffer = BufClass ? BufClass.from(bytes) : bytes;
+
+      if (window.mtState.CustomFile) {
+        fileToUpload = new window.mtState.CustomFile(fileName, len, "", fileBuffer);
+      } else {
+        fileToUpload = new File([bytes], fileName, { type: window.mtState.uploadMimeType });
+        fileToUpload.name = fileName;
+      }
+
+      const sentMsg = await client.sendFile("me", {
+        file: fileToUpload,
+        caption: caption,
+        forceDocument: true,
+        workers: 1,
+        progressCallback: (progress) => {
+          try {
+            window.AndroidBridge.onUploadProgress(Math.round(Number(progress || 0) * 100));
+          } catch (e) {}
+        }
+      });
+
+      const msgId = (sentMsg && sentMsg.id) ? Number(sentMsg.id) : Math.floor(Date.now() / 1000);
+      window.AndroidBridge.onFileUploadedToSavedMessages(
+        fileName,
+        len,
+        window.mtState.uploadMimeType,
+        folderPath,
+        msgId
+      );
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // 8. Delete message from real Telegram 'Saved Messages'
+  window.mtDeleteSavedMessage = async function(msgId) {
+    try {
+      const client = window.mtState.client;
+      if (!client) return;
+      await client.deleteMessages("me", [Number(msgId)], { revoke: true });
+      window.AndroidBridge.onBridgeStatus("DELETED", "تم حذف الملف من الرسائل المحفوظة في تيليجرام");
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  // Initialize on load
+  loadMtprotoLibrary();
+</script>
+</body>
+</html>

@@ -1,1 +1,1 @@
-// Legacy file cleared automatically for Mango Drive Unlim
+// Legacy file cleared automatically
