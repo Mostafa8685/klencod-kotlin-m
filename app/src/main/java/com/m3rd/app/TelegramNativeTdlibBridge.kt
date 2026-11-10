@@ -118,8 +118,9 @@ object TelegramNativeTdlibBridge {
                 }
                 val excProxy = Proxy.newProxyInstance(
                     excHandlerCls.classLoader,
-                    arrayOf(excHandlerCls)
-                ) { _, _, _ -> null }
+                    arrayOf(excHandlerCls),
+                    InvocationHandler { _, _, _ -> null }
+                )
 
                 val createMethod = clientClass.getMethod(
                     "create",
@@ -146,9 +147,10 @@ object TelegramNativeTdlibBridge {
             iface.classLoader,
             arrayOf(iface),
             InvocationHandler { _, method, args ->
-                if (method.name == "onResult" && args != null && args.isNotEmpty() && args[0] != null) {
+                val firstArg = if (args != null && args.isNotEmpty()) args[0] else null
+                if (method.name == "onResult" && firstArg != null) {
                     try {
-                        onResultCallback(args[0])
+                        onResultCallback(firstArg)
                     } catch (t: Throwable) {
                         notifyError("خطأ في معالجة رد تيليجرام: ${t.localizedMessage ?: ""}")
                     }
@@ -356,9 +358,20 @@ object TelegramNativeTdlibBridge {
     }
 
     private fun submitPhoneNumberInternal(phoneNumber: String) {
+        val phoneSettings = try {
+            newTdObject("PhoneNumberAuthenticationSettings").apply {
+                setField(this, "allowFlashCall", false)
+                setField(this, "allowMissedCall", false)
+                setField(this, "isCurrentPhoneNumber", false)
+                setField(this, "allowSmsRetrieverApi", false)
+                setField(this, "authenticationTokens", emptyArray<String>())
+            }
+        } catch (_: Throwable) {
+            null
+        }
         val req = newTdObject("SetAuthenticationPhoneNumber").apply {
             setField(this, "phoneNumber", phoneNumber)
-            setField(this, "settings", null)
+            setField(this, "settings", phoneSettings)
         }
         sendTdRequest(req)
     }
@@ -666,6 +679,11 @@ object TelegramNativeTdlibBridge {
                 }
                 val formattedCaption = newTdObject("FormattedText").apply {
                     setField(this, "text", captionStr)
+                    try {
+                        val entityCls = Class.forName("$activePackagePrefix.TdApi\$TextEntity")
+                        val emptyEntities = java.lang.reflect.Array.newInstance(entityCls, 0)
+                        setField(this, "entities", emptyEntities)
+                    } catch (_: Throwable) {}
                 }
                 val inputMsgDoc = newTdObject("InputMessageDocument").apply {
                     setField(this, "document", inputFileLocal)
@@ -758,16 +776,16 @@ object TelegramNativeTdlibBridge {
         val ctor = cls.declaredConstructors.first()
         ctor.isAccessible = true
         val defaultArgs = ctor.parameterTypes.map { pType ->
-            when (pType) {
-                Boolean::class.javaPrimitiveType, java.lang.Boolean::class.java -> false
-                Int::class.javaPrimitiveType, java.lang.Integer::class.java -> 0
-                Long::class.javaPrimitiveType, java.lang.Long::class.java -> 0L
-                Double::class.javaPrimitiveType, java.lang.Double::class.java -> 0.0
-                Float::class.javaPrimitiveType, java.lang.Float::class.java -> 0f
-                String::class.java -> ""
-                ByteArray::class.java -> ByteArray(0)
-                LongArray::class.java -> LongArray(0)
-                IntArray::class.java -> IntArray(0)
+            when (pType.name) {
+                "boolean", "java.lang.Boolean" -> false
+                "int", "java.lang.Integer" -> 0
+                "long", "java.lang.Long" -> 0L
+                "double", "java.lang.Double" -> 0.0
+                "float", "java.lang.Float" -> 0f
+                "java.lang.String" -> ""
+                "[B" -> ByteArray(0)
+                "[J" -> LongArray(0)
+                "[I" -> IntArray(0)
                 else -> null
             }
         }.toTypedArray()
@@ -776,7 +794,7 @@ object TelegramNativeTdlibBridge {
 
     private fun findField(cls: Class<*>, name: String): java.lang.reflect.Field? {
         var current: Class<*>? = cls
-        while (current != null && current != Any::class.java) {
+        while (current != null) {
             try {
                 val f = current.getDeclaredField(name)
                 f.isAccessible = true
