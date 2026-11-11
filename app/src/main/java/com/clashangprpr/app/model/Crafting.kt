@@ -7,46 +7,61 @@ data class CraftRecipe(
     val woodCost: Int,
     val stoneCost: Int,
     val ironCost: Int,
-    val resultType: String
+    val resultType: String,
+    val iconAsset: String
 )
 
 object CraftingRegistry {
     val recipes = listOf(
         CraftRecipe(
+            "craft_godblade",
+            "نصل الأبعاد الكوني الأسطوري (ضرر 160)",
+            "أقوى سلاح في التاريخ يطلق هالات أبعاد خارقة لقهر سيد الفراغ",
+            woodCost = 5,
+            stoneCost = 5,
+            ironCost = 6,
+            resultType = "GODBLADE",
+            iconAsset = "icons/sword_flame.png"
+        ),
+        CraftRecipe(
+            "craft_plasma",
+            "مدفع البلازما السايبرنتيكي (ضرر 120)",
+            "سلاح مستقبلي يطلق مقذوفات ليزرية خارقة لتدمير الدروع والآلات",
+            woodCost = 4,
+            stoneCost = 3,
+            ironCost = 5,
+            resultType = "PLASMA",
+            iconAsset = "icons/item_10.png"
+        ),
+        CraftRecipe(
+            "craft_pickaxe",
+            "فأس التنقيب والحفر (أداة الكنز)",
+            "أداة أساسية لحفر الرمال واستخراج المفتاح المدفون",
+            woodCost = 3,
+            stoneCost = 2,
+            ironCost = 2,
+            resultType = "PICKAXE",
+            iconAsset = "icons/item_15.png"
+        ),
+        CraftRecipe(
             "craft_bomb",
-            "💣 قنبلة متفجرة (x2)",
-            "تسبب ضرراً انفجارياً واسعاً بـ 90 لجميع الوحوش المحيطة",
+            "قنبلة متفجرة (x2)",
+            "تسبب ضرراً انفجارياً بـ 120 لجميع الوحوش المحيطة",
             woodCost = 2,
             stoneCost = 1,
             ironCost = 1,
-            resultType = "BOMB"
-        ),
-        CraftRecipe(
-            "craft_sword",
-            "⚔️ سيف فولاذي معزز (ضرر 60)",
-            "سيف ثقيل مصنوع من خامات الحديد والخشب الصلب",
-            woodCost = 3,
-            stoneCost = 2,
-            ironCost = 3,
-            resultType = "SWORD"
-        ),
-        CraftRecipe(
-            "craft_potion",
-            "🧪 إكسير شفاء كلي (+90 HP)",
-            "تركيبة كيميائية حجرية متطورة لاستعادة الصحة",
-            woodCost = 1,
-            stoneCost = 3,
-            ironCost = 0,
-            resultType = "POTION"
+            resultType = "BOMB",
+            iconAsset = "icons/item_1.png"
         ),
         CraftRecipe(
             "craft_shield",
-            "🛡️ درع تيتانيوم متين (+120 أقصى صحة)",
-            "درع دفاعي متين يرفع قدرة تحملك ضد الزعماء",
-            woodCost = 2,
+            "درع النانو المتطور (+150 صحة)",
+            "درع سايبرنتيكي متقدم يرفع صحتك ويصد طلقات الرصاص",
+            woodCost = 3,
             stoneCost = 4,
-            ironCost = 4,
-            resultType = "SHIELD"
+            ironCost = 5,
+            resultType = "SHIELD",
+            iconAsset = "icons/item_3.png"
         )
     )
 }

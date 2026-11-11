@@ -8,7 +8,8 @@ data class Weapon(
     val nameEn: String,
     val damage: Int,
     val price: Int,
-    val color: Int
+    val color: Int,
+    val iconAsset: String
 )
 
 data class ShopItem(
@@ -16,7 +17,8 @@ data class ShopItem(
     val titleAr: String,
     val descAr: String,
     val price: Int,
-    val type: ItemType
+    val type: ItemType,
+    val iconAsset: String
 )
 
 enum class ItemType {
@@ -24,38 +26,42 @@ enum class ItemType {
 }
 
 object GameCatalogue {
-    val WEAPON_BASIC = Weapon("sword_basic", "سيف الفجر", "Sword of Dawn", 30, 0, Color.WHITE)
-    val WEAPON_FIRE = Weapon("sword_fire", "نصل النار الملتهب", "Flaming Blade", 55, 60, Color.parseColor("#FF5722"))
-    val WEAPON_CHRONO = Weapon("spear_chrono", "رمح كرونو الأسطوري", "Chrono Glaive", 85, 120, Color.parseColor("#00E5FF"))
+    val WEAPON_BASIC = Weapon("sword_basic", "سيف الفجر", "Sword of Dawn", 35, 0, Color.WHITE, "icons/sword_scimitar.png")
+    val WEAPON_FIRE = Weapon("sword_fire", "نصل النار الملتهب", "Flaming Blade", 60, 60, Color.parseColor("#FF5722"), "icons/sword_flame.png")
+    val WEAPON_CHRONO = Weapon("spear_chrono", "رمح كرونو الأسطوري", "Chrono Glaive", 95, 120, Color.parseColor("#00E5FF"), "icons/item_10.png")
 
     val shopItems = listOf(
         ShopItem(
             "potion_heal",
-            "جرعة شفاء كبرى (+70 صحة)",
+            "جرعة شفاء كبرى (+80 صحة)",
             "تستعيد صحة الفارس فوراً في المعركة",
             25,
-            ItemType.POTION
+            ItemType.POTION,
+            "icons/potion_health.png"
         ),
         ShopItem(
             "sword_fire",
-            "نصل النار الملتهب (ضرر 55)",
-            "سيف حارق مضاعف القوة ضد وحوش العصور",
+            "نصل النار الملتهب (ضرر 60)",
+            "سيف حارق مضاعف القوة مع هالة نارية",
             60,
-            ItemType.WEAPON
+            ItemType.WEAPON,
+            "icons/sword_flame.png"
         ),
         ShopItem(
             "armor_royal",
-            "درع الفارس الملكي (+100 أقصى صحة)",
+            "درع الفارس الملكي (+100 صحة)",
             "يزيد نقاط صحتك القصوى ويقوي دفاعك",
             80,
-            ItemType.ARMOR
+            ItemType.ARMOR,
+            "icons/item_3.png"
         ),
         ShopItem(
             "spear_chrono",
-            "رمح كرونو الأسطوري (ضرر 85)",
-            "أقوى سلاح في اللعبة لضرب وتدمير الزعماء بسرعة",
+            "رمح كرونو الأسطوري (ضرر 95)",
+            "أقوى سلاح لضرب وتدمير الزعماء بسرعة",
             120,
-            ItemType.WEAPON
+            ItemType.WEAPON,
+            "icons/item_10.png"
         )
     )
 }
