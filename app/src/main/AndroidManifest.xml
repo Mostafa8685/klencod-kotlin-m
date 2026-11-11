@@ -9,7 +9,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FullScreen">
         <activity
-            android:name=".MainActivity"
+            android:name="com.clashangprpr.app.MainActivity"
             android:exported="true"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">

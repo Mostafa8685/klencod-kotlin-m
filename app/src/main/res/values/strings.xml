@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Chrono Knight</string>
-    <string name="widget_photo_desc">Chrono Knight Widget</string>
-    <string name="widget_quick_desc">Chrono Knight Quick Launch</string>
+    <string name="app_name">حرب الفارس</string>
+    <string name="widget_photo_desc">حرب الفارس</string>
+    <string name="widget_quick_desc">حرب الفارس - تشغيل سريع</string>
 </resources>

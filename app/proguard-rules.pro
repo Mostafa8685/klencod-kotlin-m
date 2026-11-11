@@ -1,2 +1,2 @@
-# Proguard rules
--keep class com.chronoknight.game.** { *; }
+-keep class com.clashangprpr.app.** { *; }
+-dontwarn com.clashangprpr.app.**

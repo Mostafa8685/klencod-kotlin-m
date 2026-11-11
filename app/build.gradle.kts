@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.chronoknight.game"
+    namespace = "com.clashangprpr.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.chronoknight.game"
+        applicationId = "com.clashangprpr.app"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
