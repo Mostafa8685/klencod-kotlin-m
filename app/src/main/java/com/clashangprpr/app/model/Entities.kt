@@ -16,17 +16,24 @@ class Player(
 ) {
     val width = 96f
     val height = 96f
-    var maxHp = 150
-    var hp = 150
+    var maxHp = 160
+    var hp = 160
+    var maxMana = 100f
+    var mana = 100f
     var speed = 280f
     var isAttacking = false
     var isDead = false
     var facingLeft = false
     var attackCooldown = 0f
 
-    // RPG Economy & Inventory
-    var coins: Int = 30
+    // RPG Inventory & Resources
+    var coins: Int = 40
+    var wood: Int = 3
+    var stone: Int = 4
+    var iron: Int = 2
+    var bombs: Int = 2
     var potions: Int = 2
+    var hasBossKey: Boolean = false
     var equippedWeapon: Weapon = GameCatalogue.WEAPON_BASIC
     var hasRoyalArmor: Boolean = false
 
@@ -37,11 +44,14 @@ class Player(
 
     val hitbox = RectF()
 
-    fun update(deltaTime: Float, moveX: Float, moveY: Float, mapW: Float, mapH: Float) {
+    fun update(deltaTime: Float, moveX: Float, moveY: Float, mapW: Float, mapH: Float, walls: List<DungeonWall>) {
         if (isDead) {
             deadAnim.update(deltaTime)
             return
         }
+
+        // Mana regeneration (+12 per second)
+        mana = (mana + 12f * deltaTime).coerceAtMost(maxMana)
 
         if (attackCooldown > 0) attackCooldown -= deltaTime
 
@@ -54,8 +64,31 @@ class Player(
         } else {
             val len = sqrt(moveX * moveX + moveY * moveY)
             if (len > 0.1f) {
-                x += (moveX / len) * speed * deltaTime
-                y += (moveY / len) * speed * deltaTime
+                val nextX = x + (moveX / len) * speed * deltaTime
+                val nextY = y + (moveY / len) * speed * deltaTime
+
+                // Wall Collision Check (Horizontal)
+                val testHitboxX = RectF(nextX + 20f, y + 20f, nextX + width - 20f, y + height - 10f)
+                var collidesX = false
+                for (w in walls) {
+                    if (RectF.intersects(testHitboxX, w.rect)) {
+                        collidesX = true
+                        break
+                    }
+                }
+                if (!collidesX) x = nextX
+
+                // Wall Collision Check (Vertical)
+                val testHitboxY = RectF(x + 20f, nextY + 20f, x + width - 20f, nextY + height - 10f)
+                var collidesY = false
+                for (w in walls) {
+                    if (RectF.intersects(testHitboxY, w.rect)) {
+                        collidesY = true
+                        break
+                    }
+                }
+                if (!collidesY) y = nextY
+
                 walkAnim.update(deltaTime)
                 if (moveX < -0.1f) facingLeft = true
                 else if (moveX > 0.1f) facingLeft = false
@@ -78,10 +111,30 @@ class Player(
         }
     }
 
+    fun castMagic(): Projectile? {
+        if (mana >= 25f && !isDead) {
+            mana -= 25f
+            val vx = if (facingLeft) -600f else 600f
+            val startX = if (facingLeft) x - 15f else x + width + 15f
+            return Projectile(startX, y + height / 2f, vx, 0f, damage = 70, isMagic = true)
+        }
+        return null
+    }
+
+    fun throwBomb(): Projectile? {
+        if (bombs > 0 && !isDead) {
+            bombs--
+            val vx = if (facingLeft) -450f else 450f
+            val startX = if (facingLeft) x - 15f else x + width + 15f
+            return Projectile(startX, y + height / 2f, vx, 0f, damage = 95, isMagic = false)
+        }
+        return null
+    }
+
     fun usePotion(): Boolean {
         if (potions > 0 && hp < maxHp && !isDead) {
             potions--
-            hp = (hp + 70).coerceAtMost(maxHp)
+            hp = (hp + 80).coerceAtMost(maxHp)
             return true
         }
         return false
@@ -106,7 +159,7 @@ class Player(
         }
         anim.draw(canvas, x, y, width, height, flipX = facingLeft)
 
-        // Draw weapon aura if player has flame or chrono weapon
+        // Weapon Aura
         if (!isDead && equippedWeapon != GameCatalogue.WEAPON_BASIC) {
             val auraPaint = Paint().apply {
                 color = equippedWeapon.color
@@ -125,14 +178,15 @@ class Enemy(
     var x: Float,
     var y: Float,
     val isBoss: Boolean,
-    val era: EraType
+    val era: EraType,
+    val holdsKey: Boolean = false
 ) {
     val width = if (isBoss) 140f else 88f
     val height = if (isBoss) 140f else 88f
-    var maxHp = if (isBoss) 420 else 65
+    var maxHp = if (isBoss) 450 else 70
     var hp = maxHp
     var speed = if (isBoss) 130f else 170f
-    var attackDmg = if (isBoss) 25 else 12
+    var attackDmg = if (isBoss) 28 else 14
     var isDead = false
     var facingLeft = false
     var attackTimer = 0f
@@ -141,6 +195,7 @@ class Enemy(
         isBoss && era == EraType.ERA_1_MEDIEVAL -> "الفارس الأسود (زعيم القلعة)"
         isBoss && era == EraType.ERA_2_CAVES -> "حارس الكهوف الحجري (زعيم الدهاليز)"
         isBoss && era == EraType.ERA_3_ZOMBIE -> "الزومبي الطافر الأكبر (زعيم نهاية العالم)"
+        holdsKey -> "حارس المفتاح الذهبي 🗝️"
         era == EraType.ERA_3_ZOMBIE -> "زومبي جائع"
         era == EraType.ERA_2_CAVES -> "حارس الكهف"
         else -> "فارس ملعون"
@@ -218,6 +273,15 @@ class Enemy(
         }
         anim.draw(canvas, x, y, width, height, flipX = facingLeft)
 
+        // Key indicator above the key holder enemy
+        if (holdsKey && !isDead) {
+            val keyPaint = Paint().apply {
+                textSize = 30f
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("🗝️", x + width / 2, y - 22f, keyPaint)
+        }
+
         if (!isDead && hp < maxHp) {
             val barW = width * 0.8f
             val barH = 10f
@@ -226,7 +290,7 @@ class Enemy(
             val p = Paint()
             p.color = Color.BLACK
             canvas.drawRect(barX, barY, barX + barW, barY + barH, p)
-            p.color = Color.RED
+            p.color = if (holdsKey) Color.YELLOW else Color.RED
             canvas.drawRect(barX, barY, barX + (barW * (hp.toFloat() / maxHp)), barY + barH, p)
         }
     }

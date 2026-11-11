@@ -15,19 +15,26 @@ import com.clashangprpr.app.engine.ActionButton
 import com.clashangprpr.app.engine.Camera2D
 import com.clashangprpr.app.engine.VirtualJoystick
 import com.clashangprpr.app.model.CoinDrop
+import com.clashangprpr.app.model.CraftRecipe
+import com.clashangprpr.app.model.CraftingRegistry
+import com.clashangprpr.app.model.DungeonWall
 import com.clashangprpr.app.model.Enemy
 import com.clashangprpr.app.model.EraType
 import com.clashangprpr.app.model.FloatingText
 import com.clashangprpr.app.model.GameCatalogue
 import com.clashangprpr.app.model.ItemType
 import com.clashangprpr.app.model.MerchantNPC
+import com.clashangprpr.app.model.MiningRock
 import com.clashangprpr.app.model.Player
+import com.clashangprpr.app.model.Projectile
 import com.clashangprpr.app.model.ShopItem
 import com.clashangprpr.app.model.TimePortal
 import com.clashangprpr.app.model.TreasureChest
+import com.clashangprpr.app.model.WoodCrate
 import com.clashangprpr.app.model.WorldProp
 import com.clashangprpr.app.story.DialogueLine
 import com.clashangprpr.app.story.StoryManager
+import kotlin.math.sqrt
 
 class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback, Runnable {
 
@@ -39,9 +46,13 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
 
     private var camera: Camera2D = Camera2D(1280f, 720f, mapWidth, mapHeight)
     private var joystick: VirtualJoystick = VirtualJoystick(200f, 540f, 130f, 55f)
+
+    // Touch Action Buttons
     private var attackBtn: ActionButton = ActionButton(1120f, 550f, 80f, "ضربة", Color.parseColor("#E53935"))
-    private var interactBtn: ActionButton = ActionButton(960f, 570f, 60f, "تفاعل", Color.parseColor("#1E88E5"))
-    private var potionBtn: ActionButton = ActionButton(960f, 430f, 55f, "🧪 علاج", Color.parseColor("#43A047"))
+    private var magicBtn: ActionButton = ActionButton(1120f, 380f, 65f, "سحر ⚡", Color.parseColor("#00B0FF"))
+    private var bombBtn: ActionButton = ActionButton(970f, 320f, 55f, "قنبلة 💣", Color.parseColor("#FF6D00"))
+    private var potionBtn: ActionButton = ActionButton(840f, 320f, 55f, "علاج 🧪", Color.parseColor("#43A047"))
+    private var interactBtn: ActionButton = ActionButton(970f, 550f, 65f, "تفاعل", Color.parseColor("#1E88E5"))
 
     private var currentEra: EraType = EraType.ERA_1_MEDIEVAL
     private lateinit var player: Player
@@ -50,24 +61,40 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
     private val props = mutableListOf<WorldProp>()
     private val coinDrops = mutableListOf<CoinDrop>()
     private val floatingTexts = mutableListOf<FloatingText>()
+    private val projectiles = mutableListOf<Projectile>()
+    private val miningRocks = mutableListOf<MiningRock>()
+    private val woodCrates = mutableListOf<WoodCrate>()
+    private val mazeWalls = mutableListOf<DungeonWall>()
+
     private var merchant: MerchantNPC? = null
     private lateinit var portal: TimePortal
+
+    // Crafting Table in Hub
+    private val craftTableX = 780f
+    private val craftTableY = 320f
+    private val craftTableW = 80f
+    private val craftTableH = 80f
+
+    // Locked Gate in Dungeon
+    private val gateX = 1200f
+    private val gateY = 1300f
+    private var isGateUnlocked = false
+    private var bossGateWall: DungeonWall? = null
 
     // Dialogue State
     private var isDialogueOpen = false
     private var dialogueQueue = mutableListOf<DialogueLine>()
     private var currentDialogue: DialogueLine? = null
 
-    // Shop State
+    // Compact UI States (Bottom sheets)
     private var isShopOpen = false
+    private var isCraftingOpen = false
     private val shopItemRects = mutableListOf<Pair<RectF, ShopItem>>()
-    private val shopCloseRect = RectF()
+    private val craftItemRects = mutableListOf<Pair<RectF, CraftRecipe>>()
+    private val closeSheetRect = RectF()
 
-    // Game States
     enum class GameState { TITLE, PLAYING, GAME_OVER, VICTORY }
     private var state = GameState.TITLE
-
-    private var tileBitmap: Bitmap? = null
 
     init {
         holder.addCallback(this)
@@ -78,20 +105,29 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
     private fun initGame() {
         try {
             player = Player(context, 350f, 450f)
-            portal = TimePortal(mapWidth - 300f, mapHeight / 2f)
+            portal = TimePortal(400f, 1400f)
+            setupMaze()
             setupEra(currentEra)
-
-            val tileAsset = when (currentEra) {
-                EraType.ERA_1_MEDIEVAL -> "environment/medieval_tiles.png"
-                EraType.ERA_2_CAVES -> "environment/cave_totem.png"
-                EraType.ERA_3_ZOMBIE -> "environment/chest.png"
-            }
-            context.assets.open(tileAsset).use { input ->
-                tileBitmap = BitmapFactory.decodeStream(input)
-            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun setupMaze() {
+        mazeWalls.clear()
+        // Horizontal dividing walls
+        mazeWalls.add(DungeonWall(RectF(0f, 880f, 1100f, 920f)))
+        mazeWalls.add(DungeonWall(RectF(1300f, 880f, 2600f, 920f)))
+
+        // Vertical dividing walls
+        mazeWalls.add(DungeonWall(RectF(1200f, 0f, 1240f, 350f)))
+        mazeWalls.add(DungeonWall(RectF(1200f, 550f, 1240f, 880f)))
+        mazeWalls.add(DungeonWall(RectF(1200f, 920f, 1240f, 1300f)))
+        mazeWalls.add(DungeonWall(RectF(1200f, 1500f, 1240f, 1800f)))
+
+        // Boss gate wall blocking door
+        bossGateWall = DungeonWall(RectF(1200f, 1300f, 1240f, 1500f))
+        mazeWalls.add(bossGateWall!!)
     }
 
     private fun setupEra(era: EraType) {
@@ -102,40 +138,59 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
             props.clear()
             coinDrops.clear()
             floatingTexts.clear()
+            projectiles.clear()
+            miningRocks.clear()
+            woodCrates.clear()
 
             player.x = 350f
             player.y = 450f
             player.hp = player.maxHp
+            player.mana = player.maxMana
             player.isDead = false
             portal.isActive = false
+            isGateUnlocked = false
 
-            // 1. Merchant NPC in Castle Courtyard
-            if (era == EraType.ERA_1_MEDIEVAL) {
-                merchant = MerchantNPC(context, 550f, 320f)
-                // Campfires near merchant
-                props.add(WorldProp(context, "environment/fire.png", 5, 480f, 330f, 64f, 64f))
-                props.add(WorldProp(context, "environment/torch.png", 4, 300f, 200f, 32f, 64f))
-                props.add(WorldProp(context, "environment/torch.png", 4, 800f, 200f, 32f, 64f))
-                props.add(WorldProp(context, "environment/gate.png", 6, 1200f, 400f, 160f, 100f))
-            } else {
-                merchant = null
+            // Re-lock boss gate
+            if (bossGateWall != null && !mazeWalls.contains(bossGateWall)) {
+                mazeWalls.add(bossGateWall!!)
             }
 
-            // 2. Treasure Chests
-            chests.add(TreasureChest(context, 200f, 300f, 45))
-            chests.add(TreasureChest(context, 1100f, 850f, 55))
-            chests.add(TreasureChest(context, mapWidth - 400f, 300f, 70))
+            // 1. Merchant NPC & Crafting in Room 1 (Hub)
+            merchant = MerchantNPC(context, 550f, 320f)
+            props.add(WorldProp(context, "environment/fire.png", 5, 480f, 330f, 64f, 64f))
+            props.add(WorldProp(context, "environment/torch.png", 4, 300f, 200f, 32f, 64f))
+            props.add(WorldProp(context, "environment/torch.png", 4, 850f, 200f, 32f, 64f))
 
-            // 3. Boss and Enemies
-            val boss = Enemy(context, mapWidth - 450f, mapHeight / 2f, isBoss = true, era = era)
-            enemies.add(boss)
+            // 2. Resource Mines in Room 2 (Top-Right)
+            miningRocks.add(MiningRock(1500f, 250f, isIron = false))
+            miningRocks.add(MiningRock(1750f, 220f, isIron = true))
+            miningRocks.add(MiningRock(2050f, 300f, isIron = false))
+            miningRocks.add(MiningRock(2350f, 240f, isIron = true))
+            miningRocks.add(MiningRock(1850f, 550f, isIron = true))
 
-            val minionCount = if (era == EraType.ERA_3_ZOMBIE) 8 else 5
+            woodCrates.add(WoodCrate(1450f, 500f))
+            woodCrates.add(WoodCrate(1680f, 650f))
+            woodCrates.add(WoodCrate(2150f, 580f))
+            woodCrates.add(WoodCrate(2400f, 450f))
+
+            // 3. Treasure Chests
+            chests.add(TreasureChest(context, 200f, 300f, 40))
+            chests.add(TreasureChest(context, 2400f, 150f, 50))
+            chests.add(TreasureChest(context, 2350f, 1600f, 65))
+
+            // 4. Dungeon Monsters in Room 3 (Bottom-Right)
+            val keyHolderIndex = 2
+            val minionCount = if (era == EraType.ERA_3_ZOMBIE) 8 else 6
             for (i in 0 until minionCount) {
-                val ex = 750f + (i * 240f) % (mapWidth - 900f)
-                val ey = 400f + (i * 200f) % (mapHeight - 700f)
-                enemies.add(Enemy(context, ex, ey, isBoss = false, era = era))
+                val ex = 1450f + (i * 180f) % 950f
+                val ey = 1050f + (i * 140f) % 600f
+                val holdsKey = (i == keyHolderIndex)
+                enemies.add(Enemy(context, ex, ey, isBoss = false, era = era, holdsKey = holdsKey))
             }
+
+            // 5. Boss in Room 4 (Bottom-Left)
+            val boss = Enemy(context, 400f, 1250f, isBoss = true, era = era)
+            enemies.add(boss)
 
             showDialogue(StoryManager.getIntroDialogue())
         } catch (e: Exception) {
@@ -172,10 +227,14 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
             joystick.setCenter(200f, h - 180f)
             attackBtn.x = w - 160f
             attackBtn.y = h - 160f
-            interactBtn.x = w - 320f
-            interactBtn.y = h - 140f
-            potionBtn.x = w - 320f
-            potionBtn.y = h - 280f
+            magicBtn.x = w - 160f
+            magicBtn.y = h - 320f
+            bombBtn.x = w - 300f
+            bombBtn.y = h - 300f
+            potionBtn.x = w - 420f
+            potionBtn.y = h - 300f
+            interactBtn.x = w - 300f
+            interactBtn.y = h - 160f
         }
     }
 
@@ -256,9 +315,9 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
     }
 
     private fun update(deltaTime: Float) {
-        if (state != GameState.PLAYING || isDialogueOpen || isShopOpen) return
+        if (state != GameState.PLAYING || isDialogueOpen || isShopOpen || isCraftingOpen) return
 
-        player.update(deltaTime, joystick.deltaX, joystick.deltaY, mapWidth, mapHeight)
+        player.update(deltaTime, joystick.deltaX, joystick.deltaY, mapWidth, mapHeight, mazeWalls)
         camera.update(player.x, player.y)
 
         merchant?.update(deltaTime)
@@ -284,6 +343,36 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
             if (!itFloat.next().update(deltaTime)) itFloat.remove()
         }
 
+        // Update Projectiles
+        val itProj = projectiles.iterator()
+        while (itProj.hasNext()) {
+            val proj = itProj.next()
+            proj.update(deltaTime)
+
+            // Hit walls
+            for (w in mazeWalls) {
+                if (w.rect.contains(proj.x, proj.y)) {
+                    proj.isDestroyed = true
+                    break
+                }
+            }
+
+            // Hit Enemies
+            if (!proj.isDestroyed) {
+                for (enemy in enemies) {
+                    if (!enemy.isDead && enemy.hitbox.contains(proj.x, proj.y)) {
+                        enemy.takeDamage(proj.damage)
+                        floatingTexts.add(FloatingText("-${proj.damage} 💥", enemy.x + 20f, enemy.y, Color.parseColor("#FF5722")))
+                        proj.isDestroyed = true
+                        handleEnemyDeath(enemy)
+                        break
+                    }
+                }
+            }
+
+            if (proj.isDestroyed) itProj.remove()
+        }
+
         // Update enemies
         val activeEnemies = enemies.filter { !it.isDead }
         if (activeEnemies.isEmpty() && !portal.isActive) {
@@ -294,7 +383,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
             enemy.update(deltaTime, player)
         }
 
-        // Player attacks enemies
+        // Player melee attack
         if (player.isAttacking) {
             val attackHitbox = RectF(
                 if (player.facingLeft) player.x - 45f else player.x + player.width,
@@ -303,19 +392,37 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                 player.y + player.height - 10f
             )
 
+            // Hit enemies
             for (enemy in enemies) {
                 if (!enemy.isDead && RectF.intersects(attackHitbox, enemy.hitbox)) {
                     val dmg = player.equippedWeapon.damage
                     enemy.takeDamage(dmg)
                     floatingTexts.add(FloatingText("-$dmg", enemy.x + 20f, enemy.y, Color.parseColor("#FF1744")))
+                    handleEnemyDeath(enemy)
+                }
+            }
 
-                    if (enemy.isDead) {
-                        val goldAmount = if (enemy.isBoss) 60 else 15
-                        coinDrops.add(CoinDrop(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, goldAmount))
-
-                        if (enemy.isBoss) {
-                            showDialogue(StoryManager.getEraClearDialogue(currentEra))
+            // Hit mining rocks
+            for (rock in miningRocks) {
+                if (!rock.isDestroyed && RectF.intersects(attackHitbox, rock.hitbox)) {
+                    if (rock.hit()) {
+                        if (rock.isIron) {
+                            player.iron += 1
+                            floatingTexts.add(FloatingText("+1 حديد ⛏️", rock.x, rock.y - 20f, Color.parseColor("#FFD54F")))
+                        } else {
+                            player.stone += 1
+                            floatingTexts.add(FloatingText("+1 حجر 🪨", rock.x, rock.y - 20f, Color.parseColor("#B0BEC5")))
                         }
+                    }
+                }
+            }
+
+            // Hit crates
+            for (crate in woodCrates) {
+                if (!crate.isDestroyed && RectF.intersects(attackHitbox, crate.hitbox)) {
+                    if (crate.hit()) {
+                        player.wood += 2
+                        floatingTexts.add(FloatingText("+2 خشب 🪵", crate.x, crate.y - 20f, Color.parseColor("#8D6E63")))
                     }
                 }
             }
@@ -324,9 +431,18 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         // Dynamic Interact button label
         val px = player.x + player.width / 2
         val py = player.y + player.height / 2
+        val distToTable = sqrt((px - (craftTableX + 40f)) * (px - (craftTableX + 40f)) + (py - (craftTableY + 40f)) * (py - (craftTableY + 40f)))
+        val distToGate = sqrt((px - gateX) * (px - gateX) + (py - (gateY + 100f)) * (py - (gateY + 100f)))
+
         when {
+            distToTable < 110f -> {
+                interactBtn = ActionButton(interactBtn.x, interactBtn.y, interactBtn.radius, "🔨 كرافت", Color.parseColor("#7B1FA2"))
+            }
             merchant != null && merchant!!.isPlayerNear(px, py) -> {
                 interactBtn = ActionButton(interactBtn.x, interactBtn.y, interactBtn.radius, "🛒 متجر", Color.parseColor("#FF9800"))
+            }
+            distToGate < 130f && !isGateUnlocked -> {
+                interactBtn = ActionButton(interactBtn.x, interactBtn.y, interactBtn.radius, if (player.hasBossKey) "🗝️ فتح" else "🔒 مقفل", Color.parseColor("#D32F2F"))
             }
             chests.any { it.isPlayerNear(px, py) && !it.isOpened } -> {
                 interactBtn = ActionButton(interactBtn.x, interactBtn.y, interactBtn.radius, "📦 فتح", Color.parseColor("#FBC02D"))
@@ -344,13 +460,49 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         }
     }
 
+    private fun handleEnemyDeath(enemy: Enemy) {
+        if (enemy.isDead) {
+            val goldAmount = if (enemy.isBoss) 70 else 15
+            coinDrops.add(CoinDrop(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, goldAmount))
+
+            if (enemy.holdsKey) {
+                player.hasBossKey = true
+                floatingTexts.add(FloatingText("🗝️ عثرت على مفتاح قاعة الزعيم!", player.x - 40f, player.y - 40f, Color.YELLOW))
+            }
+
+            if (enemy.isBoss) {
+                showDialogue(StoryManager.getEraClearDialogue(currentEra))
+            }
+        }
+    }
+
     private fun handleInteract() {
         val px = player.x + player.width / 2
         val py = player.y + player.height / 2
 
+        // Check Crafting Table
+        val distToTable = sqrt((px - (craftTableX + 40f)) * (px - (craftTableX + 40f)) + (py - (craftTableY + 40f)) * (py - (craftTableY + 40f)))
+        if (distToTable < 110f) {
+            isCraftingOpen = true
+            return
+        }
+
         // Check Merchant
         if (merchant != null && merchant!!.isPlayerNear(px, py)) {
             isShopOpen = true
+            return
+        }
+
+        // Check Locked Gate
+        val distToGate = sqrt((px - gateX) * (px - gateX) + (py - (gateY + 100f)) * (py - (gateY + 100f)))
+        if (distToGate < 130f && !isGateUnlocked) {
+            if (player.hasBossKey) {
+                isGateUnlocked = true
+                if (bossGateWall != null) mazeWalls.remove(bossGateWall)
+                floatingTexts.add(FloatingText("🔓 تم فتح بوابة قاعة الزعيم!", px - 60f, py - 40f, Color.CYAN))
+            } else {
+                floatingTexts.add(FloatingText("🔒 البوابة مقفلة! ابحث عن المفتاح 🗝️ في المتاهة", px - 80f, py - 40f, Color.RED))
+            }
             return
         }
 
@@ -359,7 +511,9 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
             if (ch.isPlayerNear(px, py) && !ch.isOpened) {
                 val gold = ch.open()
                 player.coins += gold
-                floatingTexts.add(FloatingText("+$gold 🪙 صندوق كنز!", px - 40f, py - 40f, Color.parseColor("#FFD700")))
+                player.stone += 2
+                player.wood += 2
+                floatingTexts.add(FloatingText("+$gold 🪙 وقطع حجر وخشب!", px - 40f, py - 40f, Color.parseColor("#FFD700")))
                 return
             }
         }
@@ -395,7 +549,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         canvas.save()
         canvas.translate(-camera.x, -camera.y)
 
-        // Draw Castle Stone Tiles / Ground
+        // Draw Stone Floor Tiles
         val floorTilePaint = Paint().apply {
             color = Color.argb(45, 200, 200, 220)
             style = Paint.Style.STROKE
@@ -418,8 +572,51 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
             tx += tileSize
         }
 
-        // Draw Props (Campfires, Torches, Gate)
+        // Draw Maze Walls
+        for (w in mazeWalls) w.draw(canvas)
+
+        // Draw Locked Gate visualization
+        if (!isGateUnlocked) {
+            val gatePaint = Paint().apply {
+                color = Color.parseColor("#D32F2F")
+                strokeWidth = 10f
+                style = Paint.Style.STROKE
+            }
+            canvas.drawRect(gateX - 10f, gateY, gateX + 50f, gateY + 200f, gatePaint)
+            val pText = Paint().apply {
+                color = Color.YELLOW
+                textSize = 28f
+                textAlign = Paint.Align.CENTER
+                isFakeBoldText = true
+            }
+            canvas.drawText("بوابة مقفلة 🔒", gateX + 20f, gateY + 100f, pText)
+        }
+
+        // Draw Crafting Table
+        val craftTablePaint = Paint().apply {
+            color = Color.parseColor("#5D4037")
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(craftTableX, craftTableY, craftTableX + craftTableW, craftTableY + craftTableH, 12f, 12f, craftTablePaint)
+        val pTableText = Paint().apply {
+            textSize = 34f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText("🔨", craftTableX + craftTableW / 2, craftTableY + craftTableH / 2 + 12f, pTableText)
+        val pTableLabel = Paint().apply {
+            color = Color.parseColor("#CE93D8")
+            textSize = 22f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+        canvas.drawText("طاولة الصناعة", craftTableX + craftTableW / 2, craftTableY - 10f, pTableLabel)
+
+        // Draw Props (Campfires, Torches)
         for (prop in props) prop.draw(canvas)
+
+        // Draw Resources (Rocks, Crates)
+        for (rock in miningRocks) rock.draw(canvas)
+        for (crate in woodCrates) crate.draw(canvas)
 
         // Draw Chests
         for (ch in chests) ch.draw(canvas)
@@ -429,6 +626,9 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
 
         // Draw Portal
         portal.draw(canvas)
+
+        // Draw Projectiles
+        for (p in projectiles) p.draw(canvas)
 
         // Draw Coins Drops
         for (c in coinDrops) c.draw(canvas)
@@ -447,157 +647,230 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         // Screen UI HUD
         drawHUD(canvas)
 
-        if (!isDialogueOpen && !isShopOpen) {
+        if (!isDialogueOpen && !isShopOpen && !isCraftingOpen) {
             joystick.draw(canvas)
             attackBtn.draw(canvas)
-            interactBtn.draw(canvas)
+            magicBtn.draw(canvas)
+            bombBtn.draw(canvas)
             potionBtn.draw(canvas)
+            interactBtn.draw(canvas)
         }
 
         if (isDialogueOpen) drawDialogueBox(canvas)
-        if (isShopOpen) drawShopOverlay(canvas)
+        if (isShopOpen) drawCompactShop(canvas)
+        if (isCraftingOpen) drawCompactCrafting(canvas)
     }
 
     private fun drawHUD(canvas: Canvas) {
         val p = Paint()
         val screenW = width.toFloat().coerceAtLeast(1f)
 
-        // HP Bar Box
-        p.color = Color.argb(200, 20, 20, 30)
-        canvas.drawRoundRect(40f, 35f, 380f, 130f, 16f, 16f, p)
+        // Player Stats Panel (Top-Left)
+        p.color = Color.argb(210, 20, 20, 30)
+        canvas.drawRoundRect(35f, 25f, 440f, 160f, 16f, 16f, p)
         p.color = Color.parseColor("#FFD700")
         p.style = Paint.Style.STROKE
         p.strokeWidth = 3f
-        canvas.drawRoundRect(40f, 35f, 380f, 130f, 16f, 16f, p)
+        canvas.drawRoundRect(35f, 25f, 440f, 160f, 16f, 16f, p)
         p.style = Paint.Style.FILL
 
-        // Green HP Bar
+        // HP Bar (Green)
         p.color = Color.parseColor("#2E7D32")
-        val hpWidth = (320f * (player.hp.toFloat() / player.maxHp)).coerceAtLeast(0f)
-        canvas.drawRoundRect(50f, 45f, 50f + hpWidth, 75f, 8f, 8f, p)
-
+        val hpWidth = (370f * (player.hp.toFloat() / player.maxHp)).coerceAtLeast(0f)
+        canvas.drawRoundRect(45f, 35f, 45f + hpWidth, 60f, 8f, 8f, p)
         p.color = Color.WHITE
-        p.textSize = 24f
+        p.textSize = 20f
         p.isFakeBoldText = true
-        canvas.drawText("فارس الزمن: ${player.hp}/${player.maxHp} HP", 60f, 68f, p)
+        canvas.drawText("صحة: ${player.hp}/${player.maxHp}", 55f, 54f, p)
 
-        // Weapon & Coins Info
-        p.textSize = 22f
+        // Mana Bar (Blue)
+        p.color = Color.parseColor("#0288D1")
+        val manaWidth = (370f * (player.mana / player.maxMana)).coerceAtLeast(0f)
+        canvas.drawRoundRect(45f, 65f, 45f + manaWidth, 85f, 8f, 8f, p)
+        p.color = Color.WHITE
+        p.textSize = 18f
+        canvas.drawText("طاقة السحر: ${player.mana.toInt()}/${player.maxMana.toInt()}", 55f, 81f, p)
+
+        // Economy & Inventory Info
+        p.textSize = 20f
         p.color = Color.parseColor("#FFD700")
-        canvas.drawText("💰 الذهب: ${player.coins}", 55f, 115f, p)
-
+        canvas.drawText("💰 ${player.coins}", 50f, 115f, p)
         p.color = Color.parseColor("#80D8FF")
-        canvas.drawText("🗡️ السلاح: ${player.equippedWeapon.nameAr}", 200f, 115f, p)
+        canvas.drawText("🗡️ ${player.equippedWeapon.nameAr}", 140f, 115f, p)
+
+        // Resources row
+        p.textSize = 18f
+        p.color = Color.parseColor("#FFE082")
+        val keyStatus = if (player.hasBossKey) "🗝️ المفتاح متاح!" else "🔒 لا يوجد مفتاح"
+        canvas.drawText("🪵 ${player.wood} | 🪨 ${player.stone} | ⛏️ ${player.iron} | 💣 ${player.bombs} | $keyStatus", 50f, 145f, p)
 
         // Era Title in Center
         p.textAlign = Paint.Align.CENTER
         p.textSize = 30f
         p.color = Color.parseColor("#FFD700")
-        canvas.drawText(currentEra.title, screenW / 2f, 50f, p)
+        canvas.drawText(currentEra.title, screenW / 2f, 45f, p)
         p.textSize = 20f
         p.color = Color.LTGRAY
-        canvas.drawText(currentEra.subtitle, screenW / 2f, 80f, p)
+        canvas.drawText(currentEra.subtitle, screenW / 2f, 75f, p)
 
         // Enemies count
         val left = enemies.count { !it.isDead }
         p.textAlign = Paint.Align.RIGHT
-        p.textSize = 24f
+        p.textSize = 22f
         p.color = Color.WHITE
-        val statusText = if (left == 0) "البوابة الزمنية مفتوحة! 🌀" else "الوحوش: $left"
-        canvas.drawText(statusText, screenW - 40f, 60f, p)
+        val statusText = if (left == 0) "بوابة الزمن مفتوحة! 🌀" else "الوحوش: $left"
+        canvas.drawText(statusText, screenW - 40f, 50f, p)
     }
 
-    private fun drawShopOverlay(canvas: Canvas) {
+    private fun drawCompactShop(canvas: Canvas) {
         val screenW = width.toFloat().coerceAtLeast(1f)
         val screenH = height.toFloat().coerceAtLeast(1f)
 
-        // Semi-transparent dim background
-        canvas.drawColor(Color.argb(220, 10, 12, 18))
-
-        val panelRect = RectF(100f, 60f, screenW - 100f, screenH - 60f)
+        // Compact Bottom Sheet panel (doesn't block whole screen)
+        val sheetH = 340f
+        val panelRect = RectF(60f, screenH - sheetH - 20f, screenW - 60f, screenH - 20f)
         val p = Paint()
 
-        // Shop panel
-        p.color = Color.argb(245, 25, 28, 40)
-        canvas.drawRoundRect(panelRect, 24f, 24f, p)
+        p.color = Color.argb(245, 20, 24, 35)
+        canvas.drawRoundRect(panelRect, 20f, 20f, p)
         p.color = Color.parseColor("#FFB300")
         p.style = Paint.Style.STROKE
-        p.strokeWidth = 5f
-        canvas.drawRoundRect(panelRect, 24f, 24f, p)
+        p.strokeWidth = 4f
+        canvas.drawRoundRect(panelRect, 20f, 20f, p)
+        p.style = Paint.Style.FILL
 
         // Header Title
-        p.style = Paint.Style.FILL
         p.color = Color.parseColor("#FFD700")
-        p.textSize = 38f
+        p.textSize = 30f
         p.isFakeBoldText = true
-        p.textAlign = Paint.Align.CENTER
-        canvas.drawText("🏪 متجر القلعة - التاجر إلريك", screenW / 2f, 120f, p)
+        p.textAlign = Paint.Align.LEFT
+        canvas.drawText("🏪 متجر التاجر إلريك (رصيدك: ${player.coins} 🪙)", panelRect.left + 30f, panelRect.top + 45f, p)
 
-        p.textSize = 26f
+        // Close button (Top-Right of sheet)
+        closeSheetRect.set(panelRect.right - 130f, panelRect.top + 15f, panelRect.right - 20f, panelRect.top + 55f)
+        p.color = Color.parseColor("#E53935")
+        canvas.drawRoundRect(closeSheetRect, 10f, 10f, p)
         p.color = Color.WHITE
-        canvas.drawText("رصيدك الحالي: ${player.coins} 🪙 ذهب  |  الجرعات: ${player.potions} 🧪", screenW / 2f, 160f, p)
+        p.textAlign = Paint.Align.CENTER
+        p.textSize = 22f
+        canvas.drawText("إغلاق ✕", closeSheetRect.centerX(), closeSheetRect.centerY() + 7f, p)
 
-        // Draw Shop Items Cards
+        // 4 Shop Cards
         shopItemRects.clear()
         val cardW = (panelRect.width() - 80f) / 2f
-        val cardH = 130f
+        val cardH = 110f
         val startX = panelRect.left + 30f
-        val startY = 190f
+        val startY = panelRect.top + 75f
 
         for (i in GameCatalogue.shopItems.indices) {
             val item = GameCatalogue.shopItems[i]
             val col = i % 2
             val row = i / 2
-
             val cx = startX + col * (cardW + 20f)
-            val cy = startY + row * (cardH + 20f)
+            val cy = startY + row * (cardH + 15f)
             val cardRect = RectF(cx, cy, cx + cardW, cy + cardH)
             shopItemRects.add(Pair(cardRect, item))
 
-            // Card BG
-            p.color = Color.argb(200, 38, 43, 62)
-            canvas.drawRoundRect(cardRect, 14f, 14f, p)
+            p.color = Color.argb(220, 35, 40, 58)
+            canvas.drawRoundRect(cardRect, 12f, 12f, p)
 
-            // Card Border
             val canAfford = player.coins >= item.price
-            p.color = if (canAfford) Color.parseColor("#81C784") else Color.parseColor("#E57373")
+            p.color = if (canAfford) Color.parseColor("#66BB6A") else Color.parseColor("#EF5350")
             p.style = Paint.Style.STROKE
             p.strokeWidth = 2f
-            canvas.drawRoundRect(cardRect, 14f, 14f, p)
+            canvas.drawRoundRect(cardRect, 12f, 12f, p)
             p.style = Paint.Style.FILL
 
-            // Item Title
             p.textAlign = Paint.Align.LEFT
-            p.textSize = 24f
+            p.textSize = 22f
             p.color = Color.WHITE
-            canvas.drawText(item.titleAr, cx + 20f, cy + 38f, p)
+            canvas.drawText(item.titleAr, cx + 15f, cy + 32f, p)
 
-            // Item Desc
-            p.textSize = 18f
+            p.textSize = 16f
             p.color = Color.LTGRAY
-            canvas.drawText(item.descAr, cx + 20f, cy + 70f, p)
+            canvas.drawText(item.descAr, cx + 15f, cy + 60f, p)
 
-            // Price Button
-            p.textSize = 24f
-            p.isFakeBoldText = true
+            p.textSize = 20f
             p.color = if (canAfford) Color.parseColor("#FFD700") else Color.GRAY
-            val buyText = "شراء (${item.price} 🪙)"
-            canvas.drawText(buyText, cx + 20f, cy + 110f, p)
+            canvas.drawText("شراء (${item.price} 🪙)", cx + 15f, cy + 95f, p)
         }
+    }
 
-        // Close Button
-        shopCloseRect.set(screenW / 2f - 140f, panelRect.bottom - 75f, screenW / 2f + 140f, panelRect.bottom - 20f)
+    private fun drawCompactCrafting(canvas: Canvas) {
+        val screenW = width.toFloat().coerceAtLeast(1f)
+        val screenH = height.toFloat().coerceAtLeast(1f)
+
+        val sheetH = 340f
+        val panelRect = RectF(60f, screenH - sheetH - 20f, screenW - 60f, screenH - 20f)
+        val p = Paint()
+
+        p.color = Color.argb(245, 25, 20, 35)
+        canvas.drawRoundRect(panelRect, 20f, 20f, p)
+        p.color = Color.parseColor("#BA68C8")
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = 4f
+        canvas.drawRoundRect(panelRect, 20f, 20f, p)
+        p.style = Paint.Style.FILL
+
+        // Header Title
+        p.color = Color.parseColor("#E1BEE7")
+        p.textSize = 30f
+        p.isFakeBoldText = true
+        p.textAlign = Paint.Align.LEFT
+        canvas.drawText("🔨 طاولة الصناعة (خشب: ${player.wood} | حجر: ${player.stone} | حديد: ${player.iron})", panelRect.left + 30f, panelRect.top + 45f, p)
+
+        // Close button
+        closeSheetRect.set(panelRect.right - 130f, panelRect.top + 15f, panelRect.right - 20f, panelRect.top + 55f)
         p.color = Color.parseColor("#E53935")
-        canvas.drawRoundRect(shopCloseRect, 14f, 14f, p)
+        canvas.drawRoundRect(closeSheetRect, 10f, 10f, p)
         p.color = Color.WHITE
         p.textAlign = Paint.Align.CENTER
-        p.textSize = 28f
-        p.isFakeBoldText = true
-        canvas.drawText("إغلاق المتجر (Close)", screenW / 2f, panelRect.bottom - 38f, p)
+        p.textSize = 22f
+        canvas.drawText("إغلاق ✕", closeSheetRect.centerX(), closeSheetRect.centerY() + 7f, p)
+
+        // 4 Crafting Cards
+        craftItemRects.clear()
+        val cardW = (panelRect.width() - 80f) / 2f
+        val cardH = 110f
+        val startX = panelRect.left + 30f
+        val startY = panelRect.top + 75f
+
+        for (i in CraftingRegistry.recipes.indices) {
+            val recipe = CraftingRegistry.recipes[i]
+            val col = i % 2
+            val row = i / 2
+            val cx = startX + col * (cardW + 20f)
+            val cy = startY + row * (cardH + 15f)
+            val cardRect = RectF(cx, cy, cx + cardW, cy + cardH)
+            craftItemRects.add(Pair(cardRect, recipe))
+
+            p.color = Color.argb(220, 42, 35, 56)
+            canvas.drawRoundRect(cardRect, 12f, 12f, p)
+
+            val canCraft = player.wood >= recipe.woodCost && player.stone >= recipe.stoneCost && player.iron >= recipe.ironCost
+            p.color = if (canCraft) Color.parseColor("#AB47BC") else Color.parseColor("#EF5350")
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = 2f
+            canvas.drawRoundRect(cardRect, 12f, 12f, p)
+            p.style = Paint.Style.FILL
+
+            p.textAlign = Paint.Align.LEFT
+            p.textSize = 22f
+            p.color = Color.WHITE
+            canvas.drawText(recipe.titleAr, cx + 15f, cy + 32f, p)
+
+            p.textSize = 16f
+            p.color = Color.LTGRAY
+            canvas.drawText("التكلفة: ${recipe.woodCost} خشب، ${recipe.stoneCost} حجر، ${recipe.ironCost} حديد", cx + 15f, cy + 60f, p)
+
+            p.textSize = 20f
+            p.color = if (canCraft) Color.parseColor("#CE93D8") else Color.GRAY
+            canvas.drawText(if (canCraft) "صنع الآن ⚒️" else "الموارد لا تكفي", cx + 15f, cy + 95f, p)
+        }
     }
 
     private fun handleShopTouch(tx: Float, ty: Float) {
-        if (shopCloseRect.contains(tx, ty)) {
+        if (closeSheetRect.contains(tx, ty)) {
             isShopOpen = false
             return
         }
@@ -616,21 +889,64 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                         ItemType.WEAPON -> {
                             if (item.id == "sword_fire") {
                                 player.equippedWeapon = GameCatalogue.WEAPON_FIRE
-                                floatingTexts.add(FloatingText("تجهيز سيف النار! 🔥", player.x, player.y - 30f, Color.parseColor("#FF5722")))
+                                floatingTexts.add(FloatingText("سيف النار مجهز! 🔥", player.x, player.y - 30f, Color.parseColor("#FF5722")))
                             } else if (item.id == "spear_chrono") {
                                 player.equippedWeapon = GameCatalogue.WEAPON_CHRONO
-                                floatingTexts.add(FloatingText("تجهيز رمح كرونو! ⚡", player.x, player.y - 30f, Color.parseColor("#00E5FF")))
+                                floatingTexts.add(FloatingText("رمح كرونو مجهز! ⚡", player.x, player.y - 30f, Color.parseColor("#00E5FF")))
                             }
                         }
                         ItemType.ARMOR -> {
                             player.hasRoyalArmor = true
                             player.maxHp = 250
                             player.hp = (player.hp + 100).coerceAtMost(player.maxHp)
-                            floatingTexts.add(FloatingText("ارتداء درع الفارس! 🛡️ (+100 HP)", player.x, player.y - 30f, Color.YELLOW))
+                            floatingTexts.add(FloatingText("درع ملكي! 🛡️ (+100 HP)", player.x, player.y - 30f, Color.YELLOW))
                         }
                     }
                 } else {
                     floatingTexts.add(FloatingText("الذهب غير كافٍ! ❌", player.x, player.y - 30f, Color.RED))
+                }
+                return
+            }
+        }
+    }
+
+    private fun handleCraftTouch(tx: Float, ty: Float) {
+        if (closeSheetRect.contains(tx, ty)) {
+            isCraftingOpen = false
+            return
+        }
+
+        for (pair in craftItemRects) {
+            val rect = pair.first
+            val recipe = pair.second
+            if (rect.contains(tx, ty)) {
+                if (player.wood >= recipe.woodCost && player.stone >= recipe.stoneCost && player.iron >= recipe.ironCost) {
+                    player.wood -= recipe.woodCost
+                    player.stone -= recipe.stoneCost
+                    player.iron -= recipe.ironCost
+
+                    when (recipe.resultType) {
+                        "BOMB" -> {
+                            player.bombs += 2
+                            floatingTexts.add(FloatingText("+2 قنابل متفجرة! 💣", player.x, player.y - 30f, Color.parseColor("#FF6D00")))
+                        }
+                        "SWORD" -> {
+                            player.equippedWeapon = GameCatalogue.WEAPON_FIRE
+                            floatingTexts.add(FloatingText("صنع سيف فولاذي معزز! ⚔️", player.x, player.y - 30f, Color.parseColor("#00E5FF")))
+                        }
+                        "POTION" -> {
+                            player.potions += 2
+                            floatingTexts.add(FloatingText("+2 إكسير شفاء! 🧪", player.x, player.y - 30f, Color.GREEN))
+                        }
+                        "SHIELD" -> {
+                            player.hasRoyalArmor = true
+                            player.maxHp = 280
+                            player.hp = (player.hp + 120).coerceAtMost(player.maxHp)
+                            floatingTexts.add(FloatingText("صنع درع تيتانيوم! 🛡️ (+120 HP)", player.x, player.y - 30f, Color.YELLOW))
+                        }
+                    }
+                } else {
+                    floatingTexts.add(FloatingText("الموارد غير كافية! ❌", player.x, player.y - 30f, Color.RED))
                 }
                 return
             }
@@ -643,7 +959,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         val screenH = height.toFloat().coerceAtLeast(1f)
 
         val boxRect = RectF(80f, screenH - 280f, screenW - 80f, screenH - 40f)
-
         val p = Paint()
         p.color = Color.argb(235, 15, 15, 25)
         canvas.drawRoundRect(boxRect, 20f, 20f, p)
@@ -686,15 +1001,15 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
 
         p.color = Color.parseColor("#FFD700")
         p.textSize = 68f
-        canvas.drawText("حرب الفارس", screenW / 2f, screenH / 2f - 90f, p)
+        canvas.drawText("حرب الفارس: صراع العصور", screenW / 2f, screenH / 2f - 90f, p)
 
         p.color = Color.WHITE
-        p.textSize = 38f
-        canvas.drawText("صراع العصور والوحوش - Knight War", screenW / 2f, screenH / 2f - 20f, p)
+        p.textSize = 34f
+        canvas.drawText("متاهات القلعة، التعدين والكرافتينج، السحر والمقذوفات", screenW / 2f, screenH / 2f - 20f, p)
 
         p.color = Color.LTGRAY
         p.textSize = 24f
-        canvas.drawText("قلاع، أسلحة، تجار، صناديق كنوز، وعوالم من القرون الوسطى حتى الزومبي", screenW / 2f, screenH / 2f + 40f, p)
+        canvas.drawText("اجمع الموارد، اصنع القنابل، جد المفتاح الذهبي واقضِ على الزعماء!", screenW / 2f, screenH / 2f + 40f, p)
 
         p.color = Color.parseColor("#4CAF50")
         p.textSize = 36f
@@ -740,7 +1055,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
 
         p.color = Color.WHITE
         p.textSize = 26f
-        canvas.drawText("تم القضاء على وحوش العصور والزعماء بنجاح!", screenW / 2f, screenH / 2f + 60f, p)
+        canvas.drawText("تم استكشاف المتاهات، جمع الموارد، وصناعة الأسلحة وهزيمة قادة الظلام!", screenW / 2f, screenH / 2f + 60f, p)
 
         p.color = Color.YELLOW
         p.textSize = 30f
@@ -777,6 +1092,13 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                     return true
                 }
 
+                if (isCraftingOpen) {
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        handleCraftTouch(touchX, touchY)
+                    }
+                    return true
+                }
+
                 if (isDialogueOpen) {
                     if (action == MotionEvent.ACTION_DOWN) {
                         nextDialogue()
@@ -791,9 +1113,29 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                             player.attack()
                             return true
                         }
+                        if (magicBtn.onTouchDown(pointerId, touchX, touchY)) {
+                            val proj = player.castMagic()
+                            if (proj != null) {
+                                projectiles.add(proj)
+                                floatingTexts.add(FloatingText("سحر! ⚡", player.x, player.y - 25f, Color.parseColor("#00E5FF")))
+                            } else {
+                                floatingTexts.add(FloatingText("الطاقة غير كافية!", player.x, player.y - 25f, Color.LTGRAY))
+                            }
+                            return true
+                        }
+                        if (bombBtn.onTouchDown(pointerId, touchX, touchY)) {
+                            val bomb = player.throwBomb()
+                            if (bomb != null) {
+                                projectiles.add(bomb)
+                                floatingTexts.add(FloatingText("قنبلة! 💣", player.x, player.y - 25f, Color.parseColor("#FF6D00")))
+                            } else {
+                                floatingTexts.add(FloatingText("لا توجد قنابل! اصنعها", player.x, player.y - 25f, Color.LTGRAY))
+                            }
+                            return true
+                        }
                         if (potionBtn.onTouchDown(pointerId, touchX, touchY)) {
                             if (player.usePotion()) {
-                                floatingTexts.add(FloatingText("+70 HP شفاء! 🧪", player.x, player.y - 30f, Color.GREEN))
+                                floatingTexts.add(FloatingText("+80 HP شفاء! 🧪", player.x, player.y - 30f, Color.GREEN))
                             }
                             return true
                         }
@@ -811,8 +1153,10 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                         joystick.onTouchUp(pointerId)
                         attackBtn.onTouchUp(pointerId)
-                        interactBtn.onTouchUp(pointerId)
+                        magicBtn.onTouchUp(pointerId)
+                        bombBtn.onTouchUp(pointerId)
                         potionBtn.onTouchUp(pointerId)
+                        interactBtn.onTouchUp(pointerId)
                     }
                 }
                 return true
