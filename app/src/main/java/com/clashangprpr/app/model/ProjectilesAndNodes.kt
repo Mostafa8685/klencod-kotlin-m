@@ -9,18 +9,18 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 
-// Magic / Gun Projectile
 class Projectile(
     var x: Float,
     var y: Float,
     val vx: Float,
     val vy: Float,
     val damage: Int = 75,
-    val isMagic: Boolean = true
+    val isMagic: Boolean = true,
+    val isEnemy: Boolean = false
 ) {
     var isDestroyed = false
-    private var life = 1.6f
-    val radius = 16f
+    private var life = 1.8f
+    val radius = if (isEnemy) 12f else 15f
 
     fun update(deltaTime: Float) {
         life -= deltaTime
@@ -39,16 +39,20 @@ class Projectile(
     fun draw(canvas: Canvas) {
         if (isDestroyed) return
         val p = Paint().apply {
-            color = if (isMagic) Color.parseColor("#00E5FF") else Color.parseColor("#FF6D00")
+            color = when {
+                isEnemy -> Color.parseColor("#E91E63") // Dark enemy orb
+                isMagic -> Color.parseColor("#00E5FF") // Magic cyan flame
+                else -> Color.parseColor("#FF6D00")    // Bomb fireball
+            }
             style = Paint.Style.FILL
         }
         canvas.drawCircle(x, y, radius, p)
+
         p.color = Color.WHITE
         canvas.drawCircle(x, y, radius * 0.5f, p)
     }
 }
 
-// Mining Rock with Real Pixel Art Rock Bitmap
 class MiningRock(
     context: Context,
     var x: Float,
@@ -57,14 +61,14 @@ class MiningRock(
 ) {
     var hp = 4
     var isDestroyed = false
-    val width = 80f
-    val height = 80f
+    val width = 76f
+    val height = 76f
     val hitbox = RectF(x, y, x + width, y + height)
     private var bitmap: Bitmap? = null
 
     init {
         try {
-            context.assets.open("environment/rock_pillar.png").use { input ->
+            context.assets.open("environment/rock_rgba.png").use { input ->
                 bitmap = BitmapFactory.decodeStream(input)
             }
         } catch (e: Exception) {
@@ -89,8 +93,7 @@ class MiningRock(
             val dst = RectF(x, y, x + width, y + height)
             val p = Paint()
             if (isIron) {
-                // Tint iron rock with golden/bluish hue
-                p.colorFilter = android.graphics.LightingColorFilter(0xFFCFE8FF.toInt(), 0x001122)
+                p.colorFilter = android.graphics.LightingColorFilter(0xFFD0E8FF.toInt(), 0x001530)
             }
             canvas.drawBitmap(bmp, src, dst, p)
         } else {
@@ -98,7 +101,6 @@ class MiningRock(
             canvas.drawRect(hitbox, p)
         }
 
-        // HP dots
         val pDot = Paint().apply { color = if (isIron) Color.CYAN else Color.GREEN }
         for (i in 0 until hp) {
             canvas.drawCircle(x + 16f + (i * 16f), y - 6f, 4f, pDot)
@@ -106,7 +108,6 @@ class MiningRock(
     }
 }
 
-// Wood Crate with Real Pixel Art Crate / Barrel Bitmap
 class WoodCrate(
     context: Context,
     var x: Float,
@@ -151,42 +152,5 @@ class WoodCrate(
             val p = Paint().apply { color = Color.parseColor("#8D6E63") }
             canvas.drawRect(hitbox, p)
         }
-    }
-}
-
-// Dungeon Wall with Tiled Stone Brick Texture
-class DungeonWall(
-    val rect: RectF,
-    private val wallBitmap: Bitmap?
-) {
-    fun draw(canvas: Canvas) {
-        val bmp = wallBitmap
-        if (bmp != null) {
-            canvas.save()
-            canvas.clipRect(rect)
-            val tileW = 64f
-            val tileH = 48f
-            var cx = rect.left
-            while (cx < rect.right) {
-                var cy = rect.top
-                while (cy < rect.bottom) {
-                    canvas.drawBitmap(bmp, null, RectF(cx, cy, cx + tileW, cy + tileH), null)
-                    cy += tileH
-                }
-                cx += tileW
-            }
-            canvas.restore()
-        } else {
-            val p = Paint().apply { color = Color.DKGRAY }
-            canvas.drawRect(rect, p)
-        }
-
-        // Outline border
-        val pBorder = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
-        }
-        canvas.drawRect(rect, pBorder)
     }
 }
