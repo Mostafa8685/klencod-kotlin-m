@@ -1,12 +1,12 @@
 package com.chronoknight.game
 
+import android.app.Activity
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
-import androidx.appcompat.app.AppCompatActivity
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
 
     private lateinit var gameView: GameView
 
