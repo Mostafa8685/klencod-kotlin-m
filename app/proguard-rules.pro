@@ -1,3 +1,2 @@
--keep class com.m3rd.app.** { *; }
--keep class org.drinkless.** { *; }
--dontwarn org.drinkless.**
+# Proguard rules
+-keep class com.chronoknight.game.** { *; }
