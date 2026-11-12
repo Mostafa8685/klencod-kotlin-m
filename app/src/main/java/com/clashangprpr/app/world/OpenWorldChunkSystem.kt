@@ -13,14 +13,14 @@ import kotlin.random.Random
 data class WorldChunk(
     val cx: Int,
     val cy: Int,
-    val biome: Int, // 0=Plains, 1=Forest, 2=Village/Road, 3=Fortress, 4=GangCamp, 5=Prison, 6=SecretOrder
-    val decorItems: List<Triple<Float, Float, Int>> // x, y, type (0=tree, 1=rock, 2=grass, 3=pillar)
+    val biome: Int, // 0=Village, 1=MedievalForest, 2=CaveMining, 3=ZombiePrison, 4=PirateCoast, 5=CyberGang, 6=VoidLodge
+    val decorItems: List<Triple<Float, Float, Int>> // x, y, type (0=tree, 1=rock, 2=building/ruin, 3=web/crystal)
 )
 
 class OpenWorldChunkSystem {
     companion object {
         const val CHUNK_SIZE = 512f
-        const val GRID_COUNT = 20 // 20 x 512 = 10240px!
+        const val GRID_COUNT = 64 // 64 x 512 = 32768px (10x previous world!)
     }
 
     private val activeChunks = HashMap<Long, WorldChunk>()
@@ -28,24 +28,36 @@ class OpenWorldChunkSystem {
     private var treeBmp: Bitmap? = null
     private var pineBmp: Bitmap? = null
     private var rockBmp: Bitmap? = null
+    private var webBmp: Bitmap? = null
+    private var crystalBmp: Bitmap? = null
     private val bmpDstRect = RectF()
 
-    private val plainsPaint = Paint().apply { color = Color.parseColor("#233A23"); style = Paint.Style.FILL }
-    private val forestPaint = Paint().apply { color = Color.parseColor("#182B18"); style = Paint.Style.FILL }
-    private val roadPaint = Paint().apply { color = Color.parseColor("#38342C"); style = Paint.Style.FILL }
-    private val fortressPaint = Paint().apply { color = Color.parseColor("#2A1822"); style = Paint.Style.FILL }
-    private val gangPaint = Paint().apply { color = Color.parseColor("#33221A"); style = Paint.Style.FILL }
-    private val prisonPaint = Paint().apply { color = Color.parseColor("#1E242E"); style = Paint.Style.FILL }
-    private val secretPaint = Paint().apply { color = Color.parseColor("#141229"); style = Paint.Style.FILL }
+    private val biomePaints = arrayOf(
+        Paint().apply { color = Color.parseColor("#2A3D28"); style = Paint.Style.FILL }, // 0 Village
+        Paint().apply { color = Color.parseColor("#1B331B"); style = Paint.Style.FILL }, // 1 Medieval Forest
+        Paint().apply { color = Color.parseColor("#22202B"); style = Paint.Style.FILL }, // 2 Cave/Mining
+        Paint().apply { color = Color.parseColor("#2B1A1E"); style = Paint.Style.FILL }, // 3 Zombie/Prison
+        Paint().apply { color = Color.parseColor("#1A3545"); style = Paint.Style.FILL }, // 4 Pirate Coast
+        Paint().apply { color = Color.parseColor("#182234"); style = Paint.Style.FILL }, // 5 Cyber/Gang
+        Paint().apply { color = Color.parseColor("#160F29"); style = Paint.Style.FILL }  // 6 Void/Lodge
+    )
 
     private val tileLinePaint = Paint().apply {
-        color = Color.argb(28, 255, 255, 255)
+        color = Color.argb(24, 255, 255, 255)
         style = Paint.Style.STROKE
         strokeWidth = 1f
     }
-    private val decorPaint = Paint().apply { style = Paint.Style.FILL }
+    private val buildingPaint = Paint().apply {
+        color = Color.argb(160, 48, 42, 38)
+        style = Paint.Style.FILL
+    }
+    private val buildingRoofPaint = Paint().apply {
+        color = Color.argb(190, 90, 55, 45)
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+    }
     private val symbolPaint = Paint().apply {
-        color = Color.argb(140, 255, 215, 0)
+        color = Color.argb(150, 255, 215, 0)
         style = Paint.Style.STROKE
         strokeWidth = 4f
     }
@@ -55,19 +67,33 @@ class OpenWorldChunkSystem {
         if (treeBmp == null) treeBmp = SpriteCache.getBitmap(context, "tiles/tree_green.png")
         if (pineBmp == null) pineBmp = SpriteCache.getBitmap(context, "tiles/tree_pine.png")
         if (rockBmp == null) rockBmp = SpriteCache.getBitmap(context, "environment/rock_rgba.png")
+        if (webBmp == null) webBmp = SpriteCache.getBitmap(context, "environment/prop_web.png")
+        if (crystalBmp == null) crystalBmp = SpriteCache.getBitmap(context, "environment/crystal_green.png")
+    }
+
+    fun getBiomeAt(cx: Int, cy: Int): Int {
+        return when {
+            cx in 1..6 && cy in 1..6 -> 0        // Safe Village & Farms
+            cx in 1..24 && cy in 1..20 -> 1      // Medieval Fortress & Forests
+            cx in 1..22 && cy in 21..42 -> 2     // Dark Caves & Rare Mining Zone
+            cx in 1..24 && cy in 43..62 -> 3     // Zombie City & Iron Prison
+            cx in 25..46 && cy in 40..62 -> 4    // Pirate Coast & Islands
+            cx in 25..46 && cy in 16..39 -> 5    // Cyber Gang & Far Alchemist
+            else -> 6                            // Secret Masonic Lodge & Void Fortress
+        }
     }
 
     fun getZoneName(x: Float, y: Float): String {
         val cx = (x / CHUNK_SIZE).toInt()
         val cy = (y / CHUNK_SIZE).toInt()
-        return when {
-            cx in 1..4 && cy in 1..4 -> "الملاذ الآمن والقرية"
-            cx in 14..18 && cy in 1..5 -> "حصن زعيم الزمن (خطر شديد!)"
-            cx in 14..18 && cy in 14..18 -> "المحفل السري الغامض"
-            cx in 1..5 && cy in 14..18 -> "مختبر الكيمياء البعيد"
-            cx in 8..12 && cy in 13..17 -> "السجن الحديدي المحصّن"
-            cx in 8..12 && cy in 5..9 -> "معقل العصابات المسلحة"
-            else -> "القارة المفتوحة الشاسعة"
+        return when (getBiomeAt(cx, cy)) {
+            0 -> "القرية الآمنة والمزارع"
+            1 -> "إقليم القلعة والغابات"
+            2 -> "إقليم الكهوف ومنطقة التعدين النادرة"
+            3 -> "إقليم الزومبي والسجن الحديدي"
+            4 -> "إقليم ساحل القراصنة والكنوز"
+            5 -> "إقليم العصابات ومختبر الكيمياء"
+            else -> "إقليم الفراغ والمحفل السري"
         }
     }
 
@@ -102,25 +128,19 @@ class OpenWorldChunkSystem {
     private fun generateChunk(cx: Int, cy: Int): WorldChunk {
         val seed = (cx * 73856093L) xor (cy * 19349663L)
         val rng = Random(seed)
-        val biome = when {
-            cx in 14..18 && cy in 1..5 -> 3   // Fortress
-            cx in 14..18 && cy in 14..18 -> 6 // Secret Order Lodge
-            cx in 8..12 && cy in 13..17 -> 5  // Prison
-            cx in 8..12 && cy in 5..9 -> 4    // Gang Territory
-            (cx in 1..4 && cy in 1..4) || (cx in 1..5 && cy in 14..18) -> 2 // Village/Outpost
-            rng.nextFloat() < 0.45f -> 1
-            else -> 0
-        }
+        val biome = getBiomeAt(cx, cy)
         val items = mutableListOf<Triple<Float, Float, Int>>()
         val baseX = cx * CHUNK_SIZE
         val baseY = cy * CHUNK_SIZE
-        for (i in 0 until 10) {
-            val px = baseX + 40f + rng.nextFloat() * (CHUNK_SIZE - 80f)
-            val py = baseY + 40f + rng.nextFloat() * (CHUNK_SIZE - 80f)
+
+        for (i in 0 until 8) {
+            val px = baseX + 48f + rng.nextFloat() * (CHUNK_SIZE - 96f)
+            val py = baseY + 48f + rng.nextFloat() * (CHUNK_SIZE - 96f)
             val t = when (biome) {
-                1 -> if (rng.nextFloat() < 0.55f) 0 else 2
-                3, 5, 6 -> if (rng.nextFloat() < 0.35f) 1 else 2
-                else -> if (rng.nextFloat() < 0.25f) 1 else 2
+                1, 4 -> if (rng.nextFloat() < 0.6f) 0 else if (rng.nextFloat() < 0.35f) 2 else 1
+                2 -> if (rng.nextFloat() < 0.55f) 3 else 1
+                3, 5 -> if (rng.nextFloat() < 0.45f) 2 else 1
+                else -> if (rng.nextFloat() < 0.35f) 2 else 3
             }
             items.add(Triple(px, py, t))
         }
@@ -138,30 +158,21 @@ class OpenWorldChunkSystem {
                 val chunk = activeChunks[chunkKey(cx, cy)] ?: generateChunk(cx, cy)
                 val x = cx * CHUNK_SIZE
                 val y = cy * CHUNK_SIZE
-                val p = when (chunk.biome) {
-                    6 -> secretPaint
-                    5 -> prisonPaint
-                    4 -> gangPaint
-                    3 -> fortressPaint
-                    2 -> roadPaint
-                    1 -> forestPaint
-                    else -> plainsPaint
-                }
-                canvas.drawRect(x, y, x + CHUNK_SIZE, y + CHUNK_SIZE, p)
+                canvas.drawRect(x, y, x + CHUNK_SIZE, y + CHUNK_SIZE, biomePaints[chunk.biome])
                 canvas.drawRect(x, y, x + CHUNK_SIZE, y + CHUNK_SIZE, tileLinePaint)
 
-                // Draw Secret Lodge geometric symbol in biome 6 center
-                if (chunk.biome == 6 && cx == 16 && cy == 16) {
+                // Draw Secret Lodge geometric symbol
+                if (chunk.biome == 6 && cx == 54 && cy == 54) {
                     val mx = x + CHUNK_SIZE / 2f
                     val my = y + CHUNK_SIZE / 2f
-                    canvas.drawCircle(mx, my, 120f, symbolPaint)
+                    canvas.drawCircle(mx, my, 140f, symbolPaint)
                     trianglePath.reset()
-                    trianglePath.moveTo(mx, my - 105f)
-                    trianglePath.lineTo(mx - 95f, my + 75f)
-                    trianglePath.lineTo(mx + 95f, my + 75f)
+                    trianglePath.moveTo(mx, my - 120f)
+                    trianglePath.lineTo(mx - 105f, my + 85f)
+                    trianglePath.lineTo(mx + 105f, my + 85f)
                     trianglePath.close()
                     canvas.drawPath(trianglePath, symbolPaint)
-                    canvas.drawCircle(mx, my + 12f, 22f, symbolPaint)
+                    canvas.drawCircle(mx, my + 14f, 24f, symbolPaint)
                 }
 
                 for (i in chunk.decorItems.indices) {
@@ -175,15 +186,22 @@ class OpenWorldChunkSystem {
                             }
                         }
                         1 -> {
-                            val bmp = rockBmp
+                            rockBmp?.let {
+                                bmpDstRect.set(dx - 24f, dy - 24f, dx + 24f, dy + 24f)
+                                canvas.drawBitmap(it, null, bmpDstRect, null)
+                            }
+                        }
+                        2 -> {
+                            // Procedural village/ruin structure footprint
+                            canvas.drawRect(dx - 45f, dy - 35f, dx + 45f, dy + 35f, buildingPaint)
+                            canvas.drawRect(dx - 45f, dy - 35f, dx + 45f, dy + 35f, buildingRoofPaint)
+                        }
+                        else -> {
+                            val bmp = if (chunk.biome == 2) crystalBmp else webBmp
                             if (bmp != null) {
                                 bmpDstRect.set(dx - 22f, dy - 22f, dx + 22f, dy + 22f)
                                 canvas.drawBitmap(bmp, null, bmpDstRect, null)
                             }
-                        }
-                        else -> {
-                            decorPaint.color = if (chunk.biome == 6) Color.argb(90, 255, 215, 0) else Color.argb(65, 255, 255, 255)
-                            canvas.drawRect(dx, dy, dx + 8f, dy + 8f, decorPaint)
                         }
                     }
                 }
@@ -193,19 +211,15 @@ class OpenWorldChunkSystem {
 
     fun getOpenWorldStaticObstacles(): List<RectF> {
         return listOf(
-            // World Borders (10240 x 10240)
-            RectF(0f, 0f, 10240f, 64f),
-            RectF(0f, 10176f, 10240f, 10240f),
-            RectF(0f, 0f, 64f, 10240f),
-            RectF(10176f, 0f, 10240f, 10240f),
-            // Boss Fortress Walls (North-East: 7400..9400, 600..2400)
-            RectF(7400f, 600f, 7470f, 2400f),
-            RectF(9330f, 600f, 9400f, 2400f),
-            RectF(7400f, 600f, 9400f, 670f),
-            // Prison Outer Walls (4300..5900, 6800..8200)
-            RectF(4300f, 6800f, 4360f, 8200f),
-            RectF(5840f, 6800f, 5900f, 8200f),
-            RectF(4300f, 6800f, 5900f, 6860f)
+            // World Borders (32768 x 32768)
+            RectF(0f, 0f, 32768f, 64f),
+            RectF(0f, 32704f, 32768f, 32768f),
+            RectF(0f, 0f, 64f, 32768f),
+            RectF(32704f, 0f, 32768f, 32768f),
+            // Grand Boss Fortress Walls (North-East: 27000..30000, 2000..4800)
+            RectF(27000f, 2000f, 27080f, 4800f),
+            RectF(29920f, 2000f, 30000f, 4800f),
+            RectF(27000f, 2000f, 30000f, 2080f)
         )
     }
 }

@@ -11,13 +11,13 @@ import com.clashangprpr.app.model.Player
 import com.clashangprpr.app.systems.ProgressionSystem
 
 class GameHUD {
-    private val panelRect = RectF(20f, 16f, 410f, 154f)
+    private val panelRect = RectF(20f, 16f, 410f, 168f)
     private val iconRect = RectF()
     val muteBtnRect = RectF()
     val menuBtnRect = RectF()
 
     // Minecraft-style bottom Hotbar (6 slots)
-    val hotbarSlotRects = Array(6) { RectF() }
+    val hotbarSlotRects = Array(7) { RectF() }
     var selectedHotbarSlot: Int = 0 // 0=Sword, 1=Gun, 2=Bomb, 3=Heal, 4=Invis, 5=Speed/Mana
 
     private val bgPaint = Paint().apply {
@@ -46,6 +46,7 @@ class GameHUD {
         color = Color.parseColor("#1E88E5")
         style = Paint.Style.FILL
     }
+    private val staminaPaint = Paint().apply { color = Color.parseColor("#FFA000"); style = Paint.Style.FILL }
     private val xpPaint = Paint().apply {
         color = Color.parseColor("#8E24AA")
         style = Paint.Style.FILL
@@ -174,26 +175,36 @@ class GameHUD {
         }
         canvas.drawText("MP ${player.mana.toInt()}/${player.maxMana.toInt()}$statusTag", barLeft + 10f, 67f, barTextPaint)
 
-        // 3. XP & Level Bar
-        canvas.drawRoundRect(barLeft, 77f, barRight, 93f, 5f, 5f, barBgPaint)
+        // 3. Stamina Bar (Tactical Combat)
+        canvas.drawRoundRect(barLeft, 76f, barRight, 91f, 5f, 5f, barBgPaint)
+        val stamW = (barW * (player.stamina / player.maxStamina)).coerceIn(0f, barW)
+        canvas.drawRoundRect(barLeft, 76f, barLeft + stamW, 91f, 5f, 5f, staminaPaint)
+        canvas.drawRoundRect(barLeft, 76f, barRight, 91f, 5f, 5f, innerBorderPaint)
+        val counterTag = if (player.counterBuffTimer > 0f) " [ضربة مضادة 2.5x!]" else ""
+        canvas.drawText("لياقة ${player.stamina.toInt()}%$counterTag", barLeft + 10f, 89f, barTextPaint)
+
+        // 4. XP & Level Bar
+        canvas.drawRoundRect(barLeft, 95f, barRight, 110f, 5f, 5f, barBgPaint)
         val xpW = (barW * (prog.xp.toFloat() / prog.xpToNext.coerceAtLeast(1))).coerceIn(0f, barW)
-        canvas.drawRoundRect(barLeft, 77f, barLeft + xpW, 93f, 5f, 5f, xpPaint)
-        canvas.drawRoundRect(barLeft, 77f, barRight, 93f, 5f, 5f, innerBorderPaint)
-        canvas.drawText("Lv.${prog.level}  (${prog.xp}/${prog.xpToNext} XP)", barLeft + 10f, 90f, barTextPaint)
+        canvas.drawRoundRect(barLeft, 95f, barLeft + xpW, 110f, 5f, 5f, xpPaint)
+        canvas.drawRoundRect(barLeft, 95f, barRight, 110f, 5f, 5f, innerBorderPaint)
+        canvas.drawText("Lv.${prog.level}  (${prog.xp}/${prog.xpToNext} XP)", barLeft + 10f, 108f, barTextPaint)
 
-        // 4. Clean Resource Row with Icons (No Overlap)
-        drawCleanIconCount(canvas, iconCache["icons/item_2.png"], "G", "${player.coins}", 34f, 120f, goldPaint)
-        drawCleanIconCount(canvas, iconCache["icons/item_5.png"], "W", "${player.wood}", 120f, 120f, countPaint)
-        drawCleanIconCount(canvas, iconCache["icons/item_4.png"], "S", "${player.stone}", 192f, 120f, countPaint)
-        drawCleanIconCount(canvas, iconCache["icons/item_20.png"], "I", "${player.iron}", 264f, 120f, countPaint)
+        // 5. Clean Resource Row with Icons
+        drawCleanIconCount(canvas, iconCache["icons/item_2.png"], "G", "${player.coins}", 34f, 134f, goldPaint)
+        drawCleanIconCount(canvas, iconCache["icons/item_5.png"], "W", "${player.wood}", 120f, 134f, countPaint)
+        drawCleanIconCount(canvas, iconCache["icons/item_4.png"], "S", "${player.stone}", 192f, 134f, countPaint)
+        drawCleanIconCount(canvas, iconCache["icons/item_20.png"], "I", "${player.iron}", 264f, 134f, countPaint)
 
-        val clockText = if (hasClockHand) "عقرب الساعة: ✔" else "عقرب الساعة: ✖"
-        canvas.drawText(clockText, 34f, 144f, if (hasClockHand) goldPaint else countPaint)
+        val hungerPct = prog.hunger.toInt()
+        val hungerPaint = if (hungerPct < 25) barTextPaint else countPaint
+        canvas.drawText("جوع: $hungerPct% | كريستال: ${prog.crystal} | ميثريل: ${prog.mythril}", 34f, 158f, hungerPaint)
 
         // Era Title (Center Top)
         if (screenW >= 1050f) {
             canvas.drawText(currentEra.title, screenW / 2f + 20f, 34f, eraTitlePaint)
-            val subLine = if (zoneName.isNotEmpty()) "$zoneName  |  $compassHint" else currentEra.subtitle
+            val coords = if (zoneName.isNotEmpty()) " (${player.x.toInt()/32},${player.y.toInt()/32})" else ""
+            val subLine = if (zoneName.isNotEmpty()) "$zoneName$coords | $compassHint" else currentEra.subtitle
             canvas.drawText(subLine, screenW / 2f + 20f, 56f, eraSubPaint)
         }
 
@@ -223,23 +234,24 @@ class GameHUD {
         val ptsNote = if (prog.skillPoints > 0) " (${prog.skillPoints})" else ""
         canvas.drawText("القائمة$ptsNote", menuBtnRect.centerX(), menuBtnRect.centerY() + 5f, btnTextPaint)
 
-        // Minecraft-style Bottom Hotbar (6 clean slots)
-        val slotSize = 58f
-        val gap = 8f
-        val totalW = 6 * slotSize + 5 * gap
+        // Clean 7-slot Minecraft-style Bottom Hotbar
+        val slotSize = 56f
+        val gap = 7f
+        val totalW = 7 * slotSize + 6 * gap
         val startX = (screenW - totalW) / 2f
-        val startY = screenH - slotSize - 16f
+        val startY = screenH - slotSize - 14f
 
         val slotData = listOf(
             Triple(player.equippedWeapon.iconAsset, "سيف", ""),
-            Triple("icons/item_10.png", "مسدس", if (player.hasGun) "∞" else "مقفل"),
-            Triple("icons/item_1.png", "قنبلة", "${player.bombs}"),
+            Triple("icons/ammo_bullet.png", "مسدس", "${prog.ammo}"),
+            Triple("icons/item_1.png", "C4/قنبلة", "${player.bombs}"),
+            Triple("icons/item_5.png", "متراس", "${player.wood/2}"),
             Triple("icons/potion_health.png", "شفاء", "${player.potions}"),
             Triple("icons/potion_2.png", "إخفاء", "${prog.invisPotions}"),
-            Triple("icons/potion_3.png", "قوة", "${prog.strengthPotions}")
+            Triple("icons/pirate_3.png", "طعام", "${prog.food}")
         )
 
-        for (i in 0 until 6) {
+        for (i in 0 until 7) {
             val sx = startX + i * (slotSize + gap)
             val rect = hotbarSlotRects[i]
             rect.set(sx, startY, sx + slotSize, startY + slotSize)

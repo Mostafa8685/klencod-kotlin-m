@@ -28,56 +28,72 @@ data class Achievement(
 )
 
 enum class PotionType(val id: String, val titleAr: String, val descAr: String, val iconAsset: String, val price: Int) {
-    HEALTH("potion_health", "جرعة شفاء", "تستعيد +85 من الصحة فوراً", "icons/potion_health.png", 25),
-    SPEED("potion_speed", "جرعة السرعة", "تزيد سرعة الحركة 40% لمدة 12 ثانية", "icons/potion_2.png", 35),
-    STRENGTH("potion_strength", "جرعة القوة", "تضاعف ضرر الهجوم 40% لمدة 12 ثانية", "icons/potion_3.png", 45),
-    MANA("potion_mana", "جرعة المانا", "تملأ طاقة السحر بالكامل فوراً", "icons/potion_mana.png", 30)
+    HEALTH("potion_health", "جرعة شفاء", "تستعيد +85 من الصحة فوراً", "icons/potion_health.png", 30),
+    SPEED("potion_speed", "جرعة السرعة", "تزيد سرعة الحركة 40% لمدة 12 ثانية", "icons/potion_2.png", 45),
+    STRENGTH("potion_strength", "جرعة القوة", "تضاعف ضرر الهجوم 40% لمدة 12 ثانية", "icons/potion_3.png", 55),
+    MANA("potion_mana", "جرعة المانا", "تملأ طاقة السحر بالكامل فوراً", "icons/potion_mana.png", 35)
 }
 
 class ProgressionSystem {
     var level: Int = 1
     var xp: Int = 0
-    var xpToNext: Int = 100
+    var xpToNext: Int = 150
     var skillPoints: Int = 1
 
     var weaponUpgradeLevel: Int = 0
+    var difficultyTier: Int = 1 // 1=عادي, 2=صعب, 3=كابوس
 
-    // Buff timers from Alchemy potions
+    // Survival: Hunger, Food, Seeds, Rare Ores, Ammo
+    var hunger: Float = 100f
+    val maxHunger: Float = 100f
+    var food: Int = 3
+    var seeds: Int = 4
+    var crystal: Int = 0
+    var mythril: Int = 0
+    var ammo: Int = 24
+
+    // Buff timers
     var speedBuffTimer: Float = 0f
     var strengthBuffTimer: Float = 0f
 
-    // Potion inventory counts
+    // Potions & Story Keys
     var speedPotions: Int = 1
     var strengthPotions: Int = 1
     var manaPotions: Int = 1
     var invisPotions: Int = 0
     var hasClockHand: Boolean = false
+    var defeatedBossesMask: Int = 0
     var sageRescueCount: Int = 0
 
     val skills = listOf(
-        SkillNode("might", "قوة السيف", "+12% ضرر لكل مستوى", 0, 5),
-        SkillNode("vitality", "صلابة الفارس", "+30 صحة قصوى لكل مستوى", 0, 5),
-        SkillNode("agility", "رشاقة الزمن", "+8% سرعة حركة لكل مستوى", 0, 5),
-        SkillNode("crit", "ضربة قاضية", "+5% فرصة ضربة حرجة لكل مستوى", 0, 5),
-        SkillNode("arcane", "طاقة كرونو", "+20 مانا قصوى لكل مستوى", 0, 5)
+        SkillNode("might", "قوة السيف", "+12% ضرر لكل مستوى", 0, 10),
+        SkillNode("vitality", "صلابة الفارس", "+35 صحة قصوى لكل مستوى", 0, 10),
+        SkillNode("agility", "رشاقة الزمن", "+8% سرعة حركة لكل مستوى", 0, 8),
+        SkillNode("crit", "ضربة قاضية", "+5% فرصة ضربة حرجة لكل مستوى", 0, 8),
+        SkillNode("arcane", "طاقة كرونو", "+25 مانا قصوى لكل مستوى", 0, 8)
     )
 
     val quests = mutableListOf(
-        Quest("q_first_blood", "التطهر الأول", "اهزم 5 أعداء في أي عصر", 5, 0, 60, 80),
-        Quest("q_miner", "جامع الموارد", "اجمع 6 حجارة أو أخشاب أو حديد", 6, 0, 50, 60),
-        Quest("q_era_1", "شظية القلعة", "استعد الشظية الأولى من قلعة القرون الوسطى", 1, 0, 120, 150),
-        Quest("q_open_soldiers", "تطهير المعسكرات", "اهزم 15 جندياً في القارة المفتوحة", 15, 0, 160, 200),
-        Quest("q_open_alchemist", "رحلة الكيمياء", "زر تاجر الكيمياء البعيد واشترِ مشروب الإخفاء", 1, 0, 100, 120),
-        Quest("q_open_clockhand", "عقرب الساعة المفقود", "اهزم زعيم الحصن في القارة المفتوحة واستعد عقرب الساعة", 1, 0, 350, 400),
-        Quest("q_era_4", "كنز القراصنة", "أكمل عصر جزيرة القراصنة", 1, 0, 180, 220),
-        Quest("q_void", "حارس الساعة الحقيقي", "اهزم سيد الفراغ في العصر السادس", 1, 0, 400, 500)
+        Quest("q_first_blood", "التطهر الأول", "اهزم 10 أعداء في أي إقليم", 10, 0, 80, 120),
+        Quest("q_miner", "منقّب المعادن", "استخرج 15 حجراً أو معدناً بالفأس", 15, 0, 100, 150),
+        Quest("q_farmer", "مزارع القرية", "احصد 4 محاصيل من الحقل لإطعام نفسك", 4, 0, 90, 110),
+        Quest("q_era_1", "شظية القلعة", "اهزم فارس القلعة الأول لدخول العالم المفتوح", 1, 0, 150, 200),
+        Quest("q_open_soldiers", "تطهير المعسكرات", "اهزم 30 من جنود العصابات والوحوش", 30, 0, 250, 350),
+        Quest("q_open_alchemist", "رحلة الكيمياء", "زر تاجر الكيمياء البعيد واشترِ مشروب الإخفاء", 1, 0, 120, 160),
+        Quest("q_prison", "كسر القيود", "سرقة خزينة السجن المحصن وهزيمة الحراس", 1, 0, 300, 400),
+        Quest("q_lodge", "أسرار المحفل", "اخترق المحفل السري الغامض", 1, 0, 400, 500),
+        Quest("q_boss_cave", "سيد الكهوف", "اهزم زعيم إقليم الكهوف في العالم المفتوح", 1, 0, 350, 450),
+        Quest("q_boss_pirate", "قبطان البحار", "اهزم زعيم إقليم القراصنة في العالم المفتوح", 1, 0, 400, 500),
+        Quest("q_open_clockhand", "عقرب الساعة المفقود", "اهزم زعيم الحصن الأعظم لاستعادة عقرب الساعة", 1, 0, 600, 800),
+        Quest("q_void", "حارس الساعة الحقيقي", "اهزم سيد الفراغ في البعد السابع", 1, 0, 1000, 1500)
     )
 
     val achievements = mutableListOf(
         Achievement("ach_first_kill", "أول انتصار"),
         Achievement("ach_craft", "صانع محترف"),
-        Achievement("ach_level3", "فارس متمرس (المستوى 3)"),
-        Achievement("ach_hacker", "مخترق الأنظمة (العصر 5)"),
+        Achievement("ach_level5", "فارس متمرس (المستوى 5)"),
+        Achievement("ach_farmer", "مزارع البقاء"),
+        Achievement("ach_hacker", "مخترق الأنظمة"),
         Achievement("ach_guardian", "حارس الزمن الأسطوري")
     )
 
@@ -88,9 +104,9 @@ class ProgressionSystem {
             xp -= xpToNext
             level++
             skillPoints++
-            xpToNext = (xpToNext * 1.35f).toInt()
+            xpToNext = (xpToNext * 1.4f).toInt()
             leveledUp = true
-            if (level >= 3) unlockAchievement("ach_level3")
+            if (level >= 5) unlockAchievement("ach_level5")
         }
         return leveledUp
     }
@@ -110,18 +126,21 @@ class ProgressionSystem {
         return 1.0f + (mightLvl * 0.12f) + (weaponUpgradeLevel * 0.15f) + buff
     }
 
-    fun getBonusMaxHp(): Int = skills[1].level * 30
+    fun getBonusMaxHp(): Int = skills[1].level * 35
     fun getSpeedMultiplier(): Float {
         val agiLvl = skills[2].level
         val buff = if (speedBuffTimer > 0f) 0.40f else 0f
-        return 1.0f + (agiLvl * 0.08f) + buff
+        val hungerPenalty = if (hunger <= 15f) 0.80f else 1.0f
+        return (1.0f + (agiLvl * 0.08f) + buff) * hungerPenalty
     }
     fun getCritChance(): Float = 0.18f + (skills[3].level * 0.05f)
-    fun getBonusMaxMana(): Float = skills[4].level * 20f
+    fun getBonusMaxMana(): Float = skills[4].level * 25f
 
     fun updateBuffs(deltaTime: Float) {
         if (speedBuffTimer > 0f) speedBuffTimer = (speedBuffTimer - deltaTime).coerceAtLeast(0f)
         if (strengthBuffTimer > 0f) strengthBuffTimer = (strengthBuffTimer - deltaTime).coerceAtLeast(0f)
+        // Hunger slowly drains over time
+        hunger = (hunger - 0.55f * deltaTime).coerceAtLeast(0f)
     }
 
     fun advanceQuest(questId: String, amount: Int = 1): Quest? {
@@ -138,7 +157,6 @@ class ProgressionSystem {
     fun onEraCompleted(era: EraType): List<Quest> {
         val completed = mutableListOf<Quest>()
         if (era == EraType.ERA_1_MEDIEVAL) advanceQuest("q_era_1")?.let { completed.add(it) }
-        if (era == EraType.ERA_4_ISLAND) advanceQuest("q_era_4")?.let { completed.add(it) }
         if (era == EraType.ERA_6_VOID) {
             advanceQuest("q_void")?.let { completed.add(it) }
             unlockAchievement("ach_guardian")

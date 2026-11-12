@@ -149,10 +149,10 @@ class GameDialogs {
 
         alchemistItemRects.clear()
         val items = listOf(
-            Triple(PotionType.SPEED, "مشروب الإخفاء (12 ثانية)", 45),
-            Triple(PotionType.STRENGTH, "جرعة القوة (+40% ضرر)", 45),
-            Triple(PotionType.HEALTH, "جرعة شفاء كبرى (+85 صحة)", 25),
-            Triple(PotionType.MANA, "جرعة المانا الكاملة", 30)
+            Triple(PotionType.SPEED, "مشروب الإخفاء (45 ذهب)", 45),
+            Triple(PotionType.STRENGTH, "تحويل: 10 خشب ← 2 حديد", 0),
+            Triple(PotionType.HEALTH, "تحويل: 15 خشب ← 1 كريستال", 0),
+            Triple(PotionType.MANA, "تحويل: 20 خشب ← 1 ميثريل", 0)
         )
         val cardW = (panelRect.width() - 80f) / 2f
         val cardH = 112f
@@ -169,7 +169,7 @@ class GameDialogs {
             // Tag SPEED slot 0 as invisibility potion purchase
             alchemistItemRects.add(Pair(cardRect, ptype))
 
-            val canAfford = player.coins >= price
+            val canAfford = if (price > 0) player.coins >= price else player.wood >= (if (i == 1) 10 else if (i == 2) 15 else 20)
             canvas.drawRoundRect(cardRect, 12f, 12f, cardBgPaint)
             cardBorderPaint.color = if (canAfford) Color.parseColor("#E040FB") else Color.parseColor("#EF5350")
             canvas.drawRoundRect(cardRect, 12f, 12f, cardBorderPaint)
@@ -179,10 +179,11 @@ class GameDialogs {
                 canvas.drawBitmap(ico, null, iconDstRect, null)
             }
             canvas.drawText(title, cx + 72f, cy + 32f, itemTitlePaint)
-            val desc = if (i == 0) "يخفيك عن أعين الوحوش لسرقة المعسكرات!" else ptype.descAr
+            val desc = when (i) { 0 -> "يخفيك عن أعين الوحوش للسرقة"; 1 -> "تحويل الخشب لمعادن عند الخيميائي"; 2 -> "كريستال نادر لتصنيع البلازما"; else -> "ميثريل أسطوري لنصل الأبعاد" }
             canvas.drawText(desc, cx + 72f, cy + 58f, itemDescPaint)
             itemPricePaint.color = if (canAfford) Color.parseColor("#FFD700") else Color.GRAY
-            canvas.drawText("شراء ($price ذهب)", cx + 72f, cy + 92f, itemPricePaint)
+            val lbl = if (price > 0) "شراء ($price ذهب)" else "تحويل الخشب الآن"
+            canvas.drawText(lbl, cx + 72f, cy + 92f, itemPricePaint)
         }
     }
 
@@ -279,6 +280,7 @@ class GameDialogs {
         screenW: Float,
         screenH: Float,
         player: Player,
+        prog: ProgressionSystem,
         frameInventoryBmp: Bitmap?,
         iconCache: Map<String, Bitmap>
     ) {
@@ -335,7 +337,7 @@ class GameDialogs {
                 "SHIELD" -> player.hasNanoArmor
                 else -> false
             }
-            val canCraft = !isOwned && player.wood >= recipe.woodCost && player.stone >= recipe.stoneCost && player.iron >= recipe.ironCost
+            val canCraft = !isOwned && player.wood >= recipe.woodCost && player.stone >= recipe.stoneCost && player.iron >= recipe.ironCost && prog.crystal >= recipe.crystalCost && prog.mythril >= recipe.mythrilCost
 
             canvas.drawRoundRect(cardRect, 12f, 12f, cardBgPaint)
             cardBorderPaint.color = when {
@@ -351,7 +353,8 @@ class GameDialogs {
             }
 
             canvas.drawText(recipe.titleAr, cx + 70f, cy + 30f, itemTitlePaint)
-            canvas.drawText("التكلفة: ${recipe.woodCost} خشب، ${recipe.stoneCost} حجر، ${recipe.ironCost} حديد", cx + 70f, cy + 56f, itemDescPaint)
+            val rareTxt = (if (recipe.crystalCost > 0) "، ${recipe.crystalCost} كريستال" else "") + (if (recipe.mythrilCost > 0) "، ${recipe.mythrilCost} ميثريل" else "")
+            canvas.drawText("التكلفة: ${recipe.woodCost}خ ${recipe.stoneCost}ح ${recipe.ironCost}م$rareTxt", cx + 70f, cy + 56f, itemDescPaint)
 
             itemPricePaint.color = when {
                 isOwned -> Color.parseColor("#4FC3F7")

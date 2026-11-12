@@ -68,6 +68,14 @@ object SaveManager {
             ed.putInt("pot_invis", prog.invisPotions)
             ed.putBoolean("has_clock_hand", prog.hasClockHand)
             ed.putInt("sage_rescues", prog.sageRescueCount)
+            ed.putFloat("hunger", prog.hunger)
+            ed.putInt("food", prog.food)
+            ed.putInt("seeds", prog.seeds)
+            ed.putInt("crystal", prog.crystal)
+            ed.putInt("mythril", prog.mythril)
+            ed.putInt("ammo", prog.ammo)
+            ed.putInt("diff_tier", prog.difficultyTier)
+            ed.putInt("defeated_bosses_mask", prog.defeatedBossesMask)
             for (sk in prog.skills) {
                 ed.putInt("sk_${sk.id}", sk.level)
             }
@@ -114,6 +122,14 @@ object SaveManager {
             prog.invisPotions = prefs.getInt("pot_invis", 0)
             prog.hasClockHand = prefs.getBoolean("has_clock_hand", false)
             prog.sageRescueCount = prefs.getInt("sage_rescues", 0)
+            prog.hunger = prefs.getFloat("hunger", 100f)
+            prog.food = prefs.getInt("food", 3)
+            prog.seeds = prefs.getInt("seeds", 4)
+            prog.crystal = prefs.getInt("crystal", 0)
+            prog.mythril = prefs.getInt("mythril", 0)
+            prog.ammo = prefs.getInt("ammo", 24)
+            prog.difficultyTier = prefs.getInt("diff_tier", 1)
+            prog.defeatedBossesMask = prefs.getInt("defeated_bosses_mask", 0)
             for (sk in prog.skills) {
                 sk.level = prefs.getInt("sk_${sk.id}", 0)
             }

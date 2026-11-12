@@ -436,3 +436,134 @@ class LootVault(var x: Float, var y: Float, val goldAmount: Int, val vaultName: 
         canvas.drawText("سرقة: $vaultName", x + width / 2, y - 10f, textPaint)
     }
 }
+
+
+class PlayerGrave(
+    val x: Float,
+    val y: Float,
+    var timeLeft: Float = 60f,
+    val coins: Int,
+    val wood: Int,
+    val stone: Int,
+    val iron: Int,
+    val crystal: Int,
+    val mythril: Int
+) {
+    var isCollected = false
+    companion object {
+        private val stonePaint = Paint().apply { color = Color.parseColor("#607D8B"); style = Paint.Style.FILL }
+        private val borderPaint = Paint().apply { color = Color.parseColor("#CFD8DC"); style = Paint.Style.STROKE; strokeWidth = 3f }
+        private val timerPaint = Paint().apply { color = Color.parseColor("#FF5252"); textSize = 18f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    }
+    fun update(deltaTime: Float): Boolean {
+        if (isCollected) return false
+        timeLeft -= deltaTime
+        return timeLeft > 0f
+    }
+    fun isPlayerNear(px: Float, py: Float): Boolean = sqrt((px - x) * (px - x) + (py - y) * (py - y)) < 85f
+    fun draw(canvas: Canvas) {
+        if (isCollected) return
+        canvas.drawRoundRect(x - 24f, y - 34f, x + 24f, y + 20f, 10f, 10f, stonePaint)
+        canvas.drawRoundRect(x - 24f, y - 34f, x + 24f, y + 20f, 10f, 10f, borderPaint)
+        val sec = timeLeft.toInt().coerceAtLeast(0)
+        canvas.drawText("قبرك (${sec}s)", x, y - 42f, timerPaint)
+    }
+}
+
+class FarmPlot(var x: Float, var y: Float) {
+    var stage: Int = 0 // 0=Empty, 1=Growing, 2=Ready
+    var growthTimer: Float = 0f
+    val width = 84f
+    val height = 84f
+
+    companion object {
+        private val soilPaint = Paint().apply { color = Color.parseColor("#4E342E"); style = Paint.Style.FILL }
+        private val sproutPaint = Paint().apply { color = Color.parseColor("#66BB6A"); style = Paint.Style.FILL }
+        private val readyPaint = Paint().apply { color = Color.parseColor("#FFD54F"); style = Paint.Style.FILL }
+        private val borderPaint = Paint().apply { color = Color.parseColor("#8D6E63"); style = Paint.Style.STROKE; strokeWidth = 3f }
+        private val labelPaint = Paint().apply { color = Color.WHITE; textSize = 15f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    }
+
+    fun update(deltaTime: Float) {
+        if (stage == 1) {
+            growthTimer -= deltaTime
+            if (growthTimer <= 0f) stage = 2
+        }
+    }
+
+    fun isPlayerNear(px: Float, py: Float): Boolean {
+        val cx = x + width / 2
+        val cy = y + height / 2
+        return sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy)) < 90f
+    }
+
+    fun draw(canvas: Canvas) {
+        canvas.drawRoundRect(x, y, x + width, y + height, 8f, 8f, soilPaint)
+        canvas.drawRoundRect(x, y, x + width, y + height, 8f, 8f, borderPaint)
+        when (stage) {
+            1 -> {
+                canvas.drawCircle(x + 28f, y + 42f, 10f, sproutPaint)
+                canvas.drawCircle(x + 56f, y + 42f, 10f, sproutPaint)
+                canvas.drawText("ينمو (${growthTimer.toInt()}s)", x + width / 2, y - 6f, labelPaint)
+            }
+            2 -> {
+                canvas.drawCircle(x + 28f, y + 42f, 14f, readyPaint)
+                canvas.drawCircle(x + 56f, y + 42f, 14f, readyPaint)
+                canvas.drawText("جاهز للحصاد!", x + width / 2, y - 6f, labelPaint)
+            }
+            else -> {
+                canvas.drawText("أرض زراعية", x + width / 2, y - 6f, labelPaint)
+            }
+        }
+    }
+}
+
+class RareMiningNode(
+    context: Context,
+    var x: Float,
+    var y: Float,
+    val oreType: Int // 0=Stone, 1=Iron, 2=Crystal, 3=Mythril
+) {
+    var hp = if (oreType >= 2) 6 else 4
+    var isDestroyed = false
+    var lastHitSwingId = -1
+    val width = 78f
+    val height = 78f
+    val hitbox = RectF(x, y, x + width, y + height)
+    private var bitmap: Bitmap? = SpriteCache.getBitmap(context, "environment/rock_rgba.png")
+    private val dstRect = RectF(x, y, x + width, y + height)
+
+    companion object {
+        private val crystalPaint = Paint().apply { colorFilter = LightingColorFilter(0xFF00E5FF.toInt(), 0x001144) }
+        private val mythrilPaint = Paint().apply { colorFilter = LightingColorFilter(0xFFE040FB.toInt(), 0x002244) }
+        private val ironPaint = Paint().apply { colorFilter = LightingColorFilter(0xFFD0E8FF.toInt(), 0x001530) }
+        private val labelPaint = Paint().apply { color = Color.WHITE; textSize = 14f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    }
+
+    fun hit(swingId: Int = -2): Boolean {
+        if (isDestroyed) return false
+        if (swingId >= 0 && lastHitSwingId == swingId) return false
+        if (swingId >= 0) lastHitSwingId = swingId
+        hp--
+        if (hp <= 0) isDestroyed = true
+        return true
+    }
+
+    fun draw(canvas: Canvas) {
+        if (isDestroyed) return
+        val p = when (oreType) {
+            3 -> mythrilPaint
+            2 -> crystalPaint
+            1 -> ironPaint
+            else -> null
+        }
+        bitmap?.let { canvas.drawBitmap(it, null, dstRect, p) }
+        val name = when (oreType) {
+            3 -> "ميثريل"
+            2 -> "كريستال"
+            1 -> "حديد"
+            else -> "حجر"
+        }
+        canvas.drawText("$name ($hp)", x + width / 2, y - 6f, labelPaint)
+    }
+}

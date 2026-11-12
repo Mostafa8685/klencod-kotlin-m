@@ -22,6 +22,10 @@ class Player(
     var hp = 180
     var maxMana = 100f
     var mana = 100f
+    var maxStamina = 100f
+    var stamina = 100f
+    var parryWindowTimer = 0f
+    var counterBuffTimer = 0f
     var speed = 295f
     var isAttacking = false
     var isDashing = false
@@ -113,6 +117,11 @@ class Player(
         }
 
         mana = (mana + 15f * deltaTime).coerceAtMost(maxMana)
+        if (!isDashing && !isAttacking) {
+            stamina = (stamina + 28f * deltaTime).coerceAtMost(maxStamina)
+        }
+        if (parryWindowTimer > 0f) parryWindowTimer -= deltaTime
+        if (counterBuffTimer > 0f) counterBuffTimer -= deltaTime
 
         if (attackCooldown > 0) attackCooldown -= deltaTime
         if (comboResetTimer > 0) {
@@ -197,18 +206,21 @@ class Player(
     }
 
     fun dash(): Boolean {
-        if (!isDashing && dashCooldown <= 0f && !isDead) {
+        if (!isDashing && dashCooldown <= 0f && stamina >= 20f && !isDead) {
+            stamina -= 20f
             isDashing = true
             dashTimer = 0.22f
-            dashCooldown = 0.85f
-            invincibilityTimer = 0.28f
+            dashCooldown = 0.75f
+            invincibilityTimer = 0.26f
+            parryWindowTimer = 0.28f
             return true
         }
         return false
     }
 
     fun attack(): Boolean {
-        if (!isAttacking && attackCooldown <= 0f && !isDead) {
+        if (!isAttacking && attackCooldown <= 0f && stamina >= 14f && !isDead) {
+            stamina -= 14f
             isAttacking = true
             comboStep = (comboStep + 1) % 3
             isWhirlwindActive = (comboStep == 2)
@@ -230,9 +242,8 @@ class Player(
         return false
     }
 
-    fun shootAimedGun(enemies: List<Enemy>, moveX: Float, moveY: Float, dmgMult: Float = 1.0f): Projectile? {
-        if (!hasGun || isDead || mana < 8f) return null
-        mana -= 8f
+    fun shootAimedGun(enemies: List<Enemy>, moveX: Float, moveY: Float, currentAmmo: Int, dmgMult: Float = 1.0f): Projectile? {
+        if (!hasGun || isDead || currentAmmo <= 0) return null
         val cx = x + width / 2f
         val cy = y + height / 2f
         var bestEnemy: Enemy? = null
@@ -307,8 +318,19 @@ class Player(
         return false
     }
 
+    var lastParryTriggered = false
+
     fun takeDamage(amount: Int): Boolean {
-        if (isDead || invincibilityTimer > 0f) return false
+        if (isDead) return false
+        if (parryWindowTimer > 0f) {
+            parryWindowTimer = 0f
+            counterBuffTimer = 3.5f
+            stamina = (stamina + 35f).coerceAtMost(maxStamina)
+            mana = (mana + 20f).coerceAtMost(maxMana)
+            lastParryTriggered = true
+            return false
+        }
+        if (invincibilityTimer > 0f) return false
         val dmgMult = when {
             hasNanoArmor -> 0.55f
             hasRoyalArmor -> 0.70f
@@ -398,9 +420,12 @@ class Enemy(
     var slamTargetY: Float = 0f
     var slamTimer: Float = 0f
     var slamCooldown: Float = 4.5f
+    var summonTimer: Float = 2.0f
+    var wantsToSummonWave: Boolean = false
     val slamRadius: Float = 145f
 
-    var maxHp = when {
+    private val diffMult = if (era == EraType.ERA_2_OPEN_WORLD) 1.35f else 1.0f
+    var maxHp = (when {
         isBoss && era == EraType.ERA_2_OPEN_WORLD -> 2800
         isBoss && era == EraType.ERA_6_VOID -> 1200
         isBoss && era == EraType.ERA_5_CYBER -> 950
@@ -420,7 +445,7 @@ class Enemy(
         role == EnemyRole.SPEARMAN -> 95
         role == EnemyRole.GHOUL_FAST -> 75
         else -> 85
-    }
+    } * diffMult).toInt()
     var hp = maxHp
 
     var speed = when (role) {
@@ -436,7 +461,7 @@ class Enemy(
         else -> 180f
     }
 
-    var attackDmg = when {
+    var attackDmg = (when {
         isBoss && era == EraType.ERA_2_OPEN_WORLD -> 62
         isBoss && era == EraType.ERA_6_VOID -> 50
         isBoss && era == EraType.ERA_5_CYBER -> 45
@@ -454,7 +479,7 @@ class Enemy(
         role == EnemyRole.SPEARMAN -> 22
         role == EnemyRole.ARCHER -> 18
         else -> 20
-    }
+    } * (if (era == EraType.ERA_2_OPEN_WORLD) 1.25f else 1.0f)).toInt()
 
     var isDead = false
     var facingLeft = false
@@ -633,8 +658,14 @@ class Enemy(
                         player.takeDamage(attackDmg + 15)
                     }
                 }
+                if (summonTimer > 0f) summonTimer -= effectiveDelta
             } else {
                 slamCooldown -= effectiveDelta
+                summonTimer -= effectiveDelta
+                if (summonTimer <= 0f && dist < 900f) {
+                    summonTimer = 18.0f
+                    wantsToSummonWave = true
+                }
                 if (slamCooldown <= 0f && dist < 420f) {
                     slamCooldown = 6.0f
                     isTelegraphingSlam = true
