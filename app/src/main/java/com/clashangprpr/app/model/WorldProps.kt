@@ -8,32 +8,34 @@ import android.graphics.RectF
 import com.clashangprpr.app.engine.SpriteSheet
 import kotlin.math.sqrt
 
-// Floating Text for damage or coins
 data class FloatingText(
     var text: String,
     var x: Float,
     var y: Float,
     var color: Int,
-    var lifeTime: Float = 1.0f
+    var lifeTime: Float = 1.0f,
+    val isCrit: Boolean = false
 ) {
+    companion object {
+        private val paint = Paint().apply {
+            isFakeBoldText = true
+        }
+    }
+
     fun update(deltaTime: Float): Boolean {
         lifeTime -= deltaTime
-        y -= 35f * deltaTime
+        y -= (if (isCrit) 52f else 35f) * deltaTime
         return lifeTime > 0
     }
 
     fun draw(canvas: Canvas) {
-        val p = Paint().apply {
-            color = this@FloatingText.color
-            textSize = 28f
-            isFakeBoldText = true
-            alpha = (lifeTime * 255).toInt().coerceIn(0, 255)
-        }
-        canvas.drawText(text, x, y, p)
+        paint.color = color
+        paint.textSize = if (isCrit) 38f else 28f
+        paint.alpha = (lifeTime * 255).toInt().coerceIn(0, 255)
+        canvas.drawText(text, x, y, paint)
     }
 }
 
-// Gold Coin Drop
 class CoinDrop(
     var x: Float,
     var y: Float,
@@ -41,6 +43,25 @@ class CoinDrop(
 ) {
     var isCollected = false
     private var floatTimer = 0f
+
+    companion object {
+        private val fillPaint = Paint().apply {
+            color = Color.parseColor("#FFD700")
+            style = Paint.Style.FILL
+        }
+        private val strokePaint = Paint().apply {
+            color = Color.parseColor("#FFA000")
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+        }
+        private val textPaint = Paint().apply {
+            color = Color.BLACK
+            textSize = 15f
+            style = Paint.Style.FILL
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+    }
 
     fun update(deltaTime: Float) {
         floatTimer += deltaTime * 4f
@@ -54,25 +75,12 @@ class CoinDrop(
     fun draw(canvas: Canvas) {
         if (isCollected) return
         val currentY = y + kotlin.math.sin(floatTimer) * 5f
-        val p = Paint().apply {
-            color = Color.parseColor("#FFD700")
-            style = Paint.Style.FILL
-        }
-        canvas.drawCircle(x, currentY, 14f, p)
-        p.color = Color.parseColor("#FFA000")
-        p.style = Paint.Style.STROKE
-        p.strokeWidth = 3f
-        canvas.drawCircle(x, currentY, 14f, p)
-
-        p.color = Color.BLACK
-        p.textSize = 16f
-        p.style = Paint.Style.FILL
-        p.textAlign = Paint.Align.CENTER
-        canvas.drawText("🪙", x, currentY + 6f, p)
+        canvas.drawCircle(x, currentY, 14f, fillPaint)
+        canvas.drawCircle(x, currentY, 14f, strokePaint)
+        canvas.drawText("$", x, currentY + 5f, textPaint)
     }
 }
 
-// Treasure Chest
 class TreasureChest(
     context: Context,
     var x: Float,
@@ -97,13 +105,12 @@ class TreasureChest(
 
     fun draw(canvas: Canvas) {
         if (isOpened) {
-            anim.update(1.0f) // advance to open frame
+            anim.update(1.0f)
         }
         anim.draw(canvas, x, y, width, height)
     }
 }
 
-// Castle Merchant NPC
 class MerchantNPC(
     context: Context,
     var x: Float,
@@ -111,7 +118,22 @@ class MerchantNPC(
 ) {
     val width = 96f
     val height = 96f
+    val hitbox = RectF(x + 18f, y + 20f, x + width - 18f, y + height - 8f)
     private val idleAnim = SpriteSheet(context, "sprites/merchant/idle.png", 4)
+    private val shadowRect = RectF()
+
+    companion object {
+        private val shadowPaint = Paint().apply {
+            color = Color.argb(100, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        private val textPaint = Paint().apply {
+            color = Color.parseColor("#FFD700")
+            textSize = 22f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+    }
 
     fun update(deltaTime: Float) {
         idleAnim.update(deltaTime)
@@ -123,19 +145,54 @@ class MerchantNPC(
     }
 
     fun draw(canvas: Canvas) {
+        shadowRect.set(x + 18f, y + height - 16f, x + width - 18f, y + height)
+        canvas.drawOval(shadowRect, shadowPaint)
         idleAnim.draw(canvas, x, y, width, height)
-
-        val textPaint = Paint().apply {
-            color = Color.parseColor("#FFD700")
-            textSize = 24f
-            textAlign = Paint.Align.CENTER
-            isFakeBoldText = true
-        }
-        canvas.drawText("التاجر إلريك (Merchant)", x + width / 2, y - 10f, textPaint)
+        canvas.drawText("التاجر إلريك", x + width / 2, y - 10f, textPaint)
     }
 }
 
-// Castle Prop (Fire / Torch / Gate)
+class ChronomancerNPC(
+    context: Context,
+    var x: Float,
+    var y: Float
+) {
+    val width = 96f
+    val height = 96f
+    val hitbox = RectF(x + 18f, y + 20f, x + width - 18f, y + height - 8f)
+    private val idleAnim = SpriteSheet(context, "sprites/chronomancer/idle.png", 4)
+    private val shadowRect = RectF()
+
+    companion object {
+        private val shadowPaint = Paint().apply {
+            color = Color.argb(100, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        private val textPaint = Paint().apply {
+            color = Color.parseColor("#00E5FF")
+            textSize = 22f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+    }
+
+    fun update(deltaTime: Float) {
+        idleAnim.update(deltaTime)
+    }
+
+    fun isPlayerNear(px: Float, py: Float): Boolean {
+        val dist = sqrt((px - (x + width / 2)) * (px - (x + width / 2)) + (py - (y + height / 2)) * (py - (y + height / 2)))
+        return dist < 120f
+    }
+
+    fun draw(canvas: Canvas) {
+        shadowRect.set(x + 18f, y + height - 16f, x + width - 18f, y + height)
+        canvas.drawOval(shadowRect, shadowPaint)
+        idleAnim.draw(canvas, x, y, width, height)
+        canvas.drawText("حارس الساعة", x + width / 2, y - 10f, textPaint)
+    }
+}
+
 class WorldProp(
     context: Context,
     val assetPath: String,
@@ -153,5 +210,86 @@ class WorldProp(
 
     fun draw(canvas: Canvas) {
         anim.draw(canvas, x, y, width, height)
+    }
+}
+
+
+class AlchemistNPC(context: Context, var x: Float, var y: Float) {
+    val width = 96f
+    val height = 96f
+    val hitbox = RectF(x + 18f, y + 20f, x + width - 18f, y + height - 8f)
+    private val idleAnim = SpriteSheet(context, "sprites/chronomancer/idle.png", 4)
+    private val shadowRect = RectF()
+    companion object {
+        private val shadowPaint = Paint().apply { color = Color.argb(100, 0, 0, 0); style = Paint.Style.FILL }
+        private val textPaint = Paint().apply { color = Color.parseColor("#E040FB"); textSize = 21f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    }
+    fun update(deltaTime: Float) { idleAnim.update(deltaTime) }
+    fun isPlayerNear(px: Float, py: Float): Boolean = sqrt((px - (x + width / 2)) * (px - (x + width / 2)) + (py - (y + height / 2)) * (py - (y + height / 2))) < 125f
+    fun draw(canvas: Canvas) {
+        shadowRect.set(x + 18f, y + height - 16f, x + width - 18f, y + height)
+        canvas.drawOval(shadowRect, shadowPaint)
+        idleAnim.draw(canvas, x, y, width, height)
+        canvas.drawText("تاجر الكيمياء (الإخفاء)", x + width / 2, y - 10f, textPaint)
+    }
+}
+
+class BlacksmithNPC(context: Context, var x: Float, var y: Float) {
+    val width = 96f
+    val height = 96f
+    val hitbox = RectF(x + 18f, y + 20f, x + width - 18f, y + height - 8f)
+    private val idleAnim = SpriteSheet(context, "sprites/guard_elite/idle.png", 4)
+    private val shadowRect = RectF()
+    companion object {
+        private val shadowPaint = Paint().apply { color = Color.argb(100, 0, 0, 0); style = Paint.Style.FILL }
+        private val textPaint = Paint().apply { color = Color.parseColor("#FF8A65"); textSize = 21f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    }
+    fun update(deltaTime: Float) { idleAnim.update(deltaTime) }
+    fun isPlayerNear(px: Float, py: Float): Boolean = sqrt((px - (x + width / 2)) * (px - (x + width / 2)) + (py - (y + height / 2)) * (py - (y + height / 2))) < 125f
+    fun draw(canvas: Canvas) {
+        shadowRect.set(x + 18f, y + height - 16f, x + width - 18f, y + height)
+        canvas.drawOval(shadowRect, shadowPaint)
+        idleAnim.draw(canvas, x, y, width, height)
+        canvas.drawText("الحداد (تطوير الأسلحة)", x + width / 2, y - 10f, textPaint)
+    }
+}
+
+class SageNPC(context: Context, var x: Float, var y: Float) {
+    val width = 96f
+    val height = 96f
+    val hitbox = RectF(x + 18f, y + 20f, x + width - 18f, y + height - 8f)
+    private val idleAnim = SpriteSheet(context, "sprites/chronomancer/idle.png", 4)
+    private val shadowRect = RectF()
+    companion object {
+        private val shadowPaint = Paint().apply { color = Color.argb(100, 0, 0, 0); style = Paint.Style.FILL }
+        private val textPaint = Paint().apply { color = Color.parseColor("#64FFDA"); textSize = 21f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    }
+    fun update(deltaTime: Float) { idleAnim.update(deltaTime) }
+    fun isPlayerNear(px: Float, py: Float): Boolean = sqrt((px - (x + width / 2)) * (px - (x + width / 2)) + (py - (y + height / 2)) * (py - (y + height / 2))) < 125f
+    fun draw(canvas: Canvas) {
+        shadowRect.set(x + 18f, y + height - 16f, x + width - 18f, y + height)
+        canvas.drawOval(shadowRect, shadowPaint)
+        idleAnim.draw(canvas, x, y, width, height)
+        canvas.drawText("الحكيم (المنقذ)", x + width / 2, y - 10f, textPaint)
+    }
+}
+
+class QuestGiverNPC(context: Context, var x: Float, var y: Float, val npcName: String, val questId: String) {
+    val width = 96f
+    val height = 96f
+    val hitbox = RectF(x + 18f, y + 20f, x + width - 18f, y + height - 8f)
+    private val idleAnim = SpriteSheet(context, "sprites/merchant/idle.png", 4)
+    private val shadowRect = RectF()
+    companion object {
+        private val shadowPaint = Paint().apply { color = Color.argb(100, 0, 0, 0); style = Paint.Style.FILL }
+        private val textPaint = Paint().apply { color = Color.parseColor("#81C784"); textSize = 20f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    }
+    fun update(deltaTime: Float) { idleAnim.update(deltaTime) }
+    fun isPlayerNear(px: Float, py: Float): Boolean = sqrt((px - (x + width / 2)) * (px - (x + width / 2)) + (py - (y + height / 2)) * (py - (y + height / 2))) < 125f
+    fun draw(canvas: Canvas) {
+        shadowRect.set(x + 18f, y + height - 16f, x + width - 18f, y + height)
+        canvas.drawOval(shadowRect, shadowPaint)
+        idleAnim.draw(canvas, x, y, width, height)
+        canvas.drawText("$npcName (!)", x + width / 2, y - 10f, textPaint)
     }
 }

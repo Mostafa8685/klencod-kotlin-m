@@ -24,6 +24,11 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         hideSystemUI()
+        try {
+            gameView?.resume()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onPause() {
