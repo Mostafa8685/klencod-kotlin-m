@@ -655,7 +655,9 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         for (i in hubGates.indices) hubGates[i].update(deltaTime)
         portal.update(deltaTime)
         for (i in farmPlots.indices) farmPlots[i].update(deltaTime)
-        playerGrave?.let { g ->
+        val activeGrave = playerGrave
+        if (activeGrave != null) {
+            val g = activeGrave
             if (!g.update(deltaTime)) {
                 playerGrave = null
                 floatingTexts.add(FloatingText("اختفى قبرك وضاعت أغراضك!", player.x - 40f, player.y - 40f, Color.RED))
@@ -944,21 +946,22 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                         continue
                     }
                     if (rock.hit(swingId)) {
-                    SoundEngine.playHit()
-                    particles.emitBurst(rock.x + 38f, rock.y + 38f, 8, Color.LTGRAY, speed = 160f)
-                    triggerScreenShake(0.1f, 4f)
-                    if (rock.isDestroyed) obstacleDestroyed = true
-                    if (rock.isIron) {
-                        player.iron += 1
-                        floatingTexts.add(FloatingText("+1 خام حديد", rock.x, rock.y - 20f, Color.parseColor("#FFD54F")))
-                    } else {
-                        player.stone += 1
-                        floatingTexts.add(FloatingText("+1 حجر", rock.x, rock.y - 20f, Color.parseColor("#B0BEC5")))
-                    }
-                    onResourceGathered()
+                        SoundEngine.playHit()
+                        particles.emitBurst(rock.x + 38f, rock.y + 38f, 8, Color.LTGRAY, speed = 160f)
+                        triggerScreenShake(0.1f, 4f)
+                        if (rock.isDestroyed) obstacleDestroyed = true
+                        if (rock.isIron) {
+                            player.iron += 1
+                            floatingTexts.add(FloatingText("+1 خام حديد", rock.x, rock.y - 20f, Color.parseColor("#FFD54F")))
+                        } else {
+                            player.stone += 1
+                            floatingTexts.add(FloatingText("+1 حجر", rock.x, rock.y - 20f, Color.parseColor("#B0BEC5")))
+                        }
+                        onResourceGathered()
                     }
                 }
             }
+
             for (i in rareNodes.indices) {
                 val rnode = rareNodes[i]
                 if (!rnode.isDestroyed && RectF.intersects(attackHitbox, rnode.hitbox)) {
@@ -990,27 +993,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                     player.wood += 2
                     floatingTexts.add(FloatingText("+2 خشب", crate.x, crate.y - 20f, Color.parseColor("#8D6E63")))
                     onResourceGathered()
-                    }
-                }
-            }
-            for (i in rareNodes.indices) {
-                val rnode = rareNodes[i]
-                if (!rnode.isDestroyed && RectF.intersects(attackHitbox, rnode.hitbox)) {
-                    if (!player.hasPickaxe) {
-                        floatingTexts.add(FloatingText("اصنع فأس التعدين من الطاولة أولاً!", rnode.x - 40f, rnode.y - 20f, Color.YELLOW))
-                        continue
-                    }
-                    if (rnode.hit(swingId)) {
-                        SoundEngine.playHit()
-                        if (rnode.isDestroyed) obstacleDestroyed = true
-                        when (rnode.oreType) {
-                            3 -> { prog.mythril += 1; floatingTexts.add(FloatingText("+1 ميثريل نادر!", rnode.x, rnode.y - 20f, Color.parseColor("#E040FB"))) }
-                            2 -> { prog.crystal += 1; floatingTexts.add(FloatingText("+1 كريستال!", rnode.x, rnode.y - 20f, Color.CYAN)) }
-                            1 -> { player.iron += 2; floatingTexts.add(FloatingText("+2 حديد!", rnode.x, rnode.y - 20f, Color.parseColor("#FFD54F"))) }
-                            else -> { player.stone += 2; floatingTexts.add(FloatingText("+2 حجر!", rnode.x, rnode.y - 20f, Color.LTGRAY)) }
-                        }
-                        onResourceGathered()
-                    }
                 }
             }
 
@@ -1028,27 +1010,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
                         floatingTexts.add(FloatingText("+2 خشب إضافي!", tree.x, tree.y - 30f, Color.parseColor("#A1887F")))
                     }
                     onResourceGathered()
-                    }
-                }
-            }
-            for (i in rareNodes.indices) {
-                val rnode = rareNodes[i]
-                if (!rnode.isDestroyed && RectF.intersects(attackHitbox, rnode.hitbox)) {
-                    if (!player.hasPickaxe) {
-                        floatingTexts.add(FloatingText("اصنع فأس التعدين من الطاولة أولاً!", rnode.x - 40f, rnode.y - 20f, Color.YELLOW))
-                        continue
-                    }
-                    if (rnode.hit(swingId)) {
-                        SoundEngine.playHit()
-                        if (rnode.isDestroyed) obstacleDestroyed = true
-                        when (rnode.oreType) {
-                            3 -> { prog.mythril += 1; floatingTexts.add(FloatingText("+1 ميثريل نادر!", rnode.x, rnode.y - 20f, Color.parseColor("#E040FB"))) }
-                            2 -> { prog.crystal += 1; floatingTexts.add(FloatingText("+1 كريستال!", rnode.x, rnode.y - 20f, Color.CYAN)) }
-                            1 -> { player.iron += 2; floatingTexts.add(FloatingText("+2 حديد!", rnode.x, rnode.y - 20f, Color.parseColor("#FFD54F"))) }
-                            else -> { player.stone += 2; floatingTexts.add(FloatingText("+2 حجر!", rnode.x, rnode.y - 20f, Color.LTGRAY)) }
-                        }
-                        onResourceGathered()
-                    }
                 }
             }
 
