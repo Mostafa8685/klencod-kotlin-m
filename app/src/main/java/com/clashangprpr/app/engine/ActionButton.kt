@@ -2,58 +2,97 @@ package com.clashangprpr.app.engine
 
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
-import kotlin.math.ceil
 import kotlin.math.sqrt
 
+/**
+ * On-screen action button supporting Fortnite/PUBG-style custom HUD placement,
+ * custom scaling (0.65x..1.55x), custom opacity, cooldown sweep, and count badge.
+ */
 class ActionButton(
-    var x: Float,
-    var y: Float,
-    var radius: Float,
+    var iconPath: String,
     var label: String,
-    var colorPrimary: Int
+    var accent: Int,
+    var tintIcon: Int? = null,
+    val hudKey: String = ""
 ) {
+    var cx = 0f
+    var cy = 0f
+    var baseR = 40f
+    var customScale = 1.0f
+    var customAlpha = 0.92f
+    var customXFrac = -1f
+    var customYFrac = -1f
+
+    val r: Float get() = baseR * customScale
+    var visible = true
+    var enabled = true
+    /** remaining fraction 0..1 of the cooldown (0 = ready) */
+    var cooldown = 0f
+    var badge: String? = null
     var isPressed = false
         private set
     var pointerId = -1
         private set
 
-    var cooldownRatio: Float = 0f      // 0f = ready, 1f = full cooldown
-    var cooldownSeconds: Float = 0f
-
-    private val arcRect = RectF()
-    private val bgPaint = Paint().apply { style = Paint.Style.FILL }
-    private val cdOverlayPaint = Paint().apply {
-        color = Color.argb(170, 10, 12, 18)
-        style = Paint.Style.FILL
-    }
-    private val cdArcPaint = Paint().apply {
-        color = Color.parseColor("#FFD700")
-        style = Paint.Style.STROKE
-        strokeWidth = 6f
-    }
-    private val strokePaint = Paint().apply {
-        color = Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 5f
-    }
-    private val textPaint = Paint().apply {
-        color = Color.WHITE
-        textSize = 26f
-        textAlign = Paint.Align.CENTER
-        isFakeBoldText = true
-    }
-    private val cdTextPaint = Paint().apply {
-        color = Color.parseColor("#FFD700")
-        textSize = 28f
-        textAlign = Paint.Align.CENTER
-        isFakeBoldText = true
+    fun placeDefaultOrCustom(w: Float, h: Float, u: Float, defDx: Float, defDy: Float, defR: Float) {
+        baseR = defR * u
+        if (hudKey.isNotEmpty()) {
+            customXFrac = SaveStore.float("hud_${hudKey}_x", -1f)
+            customYFrac = SaveStore.float("hud_${hudKey}_y", -1f)
+            customScale = SaveStore.float("hud_${hudKey}_s", 1.0f).coerceIn(0.65f, 1.55f)
+            customAlpha = SaveStore.float("hud_${hudKey}_a", 0.92f).coerceIn(0.35f, 1.0f)
+        }
+        if (customXFrac in 0.03f..0.97f && customYFrac in 0.05f..0.95f) {
+            cx = customXFrac * w
+            cy = customYFrac * h
+        } else {
+            cx = w - defDx * u
+            cy = h - defDy * u
+        }
     }
 
-    fun onTouchDown(id: Int, touchX: Float, touchY: Float): Boolean {
-        val dist = sqrt((touchX - x) * (touchX - x) + (touchY - y) * (touchY - y))
-        if (dist <= radius && !isPressed) {
+    fun saveCustom(w: Float, h: Float) {
+        if (hudKey.isEmpty() || w <= 0f || h <= 0f) return
+        customXFrac = (cx / w).coerceIn(0.04f, 0.96f)
+        customYFrac = (cy / h).coerceIn(0.06f, 0.94f)
+        SaveStore.putAll(
+            mapOf(
+                "hud_${hudKey}_x" to customXFrac,
+                "hud_${hudKey}_y" to customYFrac,
+                "hud_${hudKey}_s" to customScale,
+                "hud_${hudKey}_a" to customAlpha
+            ),
+            false
+        )
+    }
+
+    fun resetCustom() {
+        customXFrac = -1f
+        customYFrac = -1f
+        customScale = 1.0f
+        customAlpha = 0.92f
+        if (hudKey.isNotEmpty()) {
+            SaveStore.putAll(
+                mapOf(
+                    "hud_${hudKey}_x" to -1f,
+                    "hud_${hudKey}_y" to -1f,
+                    "hud_${hudKey}_s" to 1.0f,
+                    "hud_${hudKey}_a" to 0.92f
+                ),
+                false
+            )
+        }
+    }
+
+    fun hitTest(x: Float, y: Float): Boolean {
+        val dx = x - cx
+        val dy = y - cy
+        return sqrt(dx * dx + dy * dy) <= r * 1.18f
+    }
+
+    fun onDown(id: Int, x: Float, y: Float): Boolean {
+        if (!visible || isPressed) return false
+        if (hitTest(x, y)) {
             isPressed = true
             pointerId = id
             return true
@@ -61,31 +100,42 @@ class ActionButton(
         return false
     }
 
-    fun onTouchUp(id: Int): Boolean {
+    fun onUp(id: Int) {
         if (isPressed && pointerId == id) {
             isPressed = false
             pointerId = -1
-            return true
         }
-        return false
     }
 
-    fun draw(canvas: Canvas) {
-        bgPaint.color = if (isPressed) Color.WHITE else colorPrimary
-        textPaint.color = if (isPressed) Color.BLACK else Color.WHITE
-        textPaint.textSize = (radius * 0.44f).coerceIn(20f, 32f)
+    fun cancel() {
+        isPressed = false
+        pointerId = -1
+    }
 
-        canvas.drawCircle(x, y, radius, bgPaint)
-        canvas.drawCircle(x, y, radius, strokePaint)
-
-        if (cooldownRatio > 0.01f) {
-            canvas.drawCircle(x, y, radius, cdOverlayPaint)
-            arcRect.set(x - radius + 3f, y - radius + 3f, x + radius - 3f, y + radius - 3f)
-            canvas.drawArc(arcRect, -90f, 360f * cooldownRatio.coerceIn(0f, 1f), false, cdArcPaint)
-            val secText = "${ceil(cooldownSeconds.toDouble()).toInt()}s"
-            canvas.drawText(secText, x, y + 10f, cdTextPaint)
-        } else {
-            canvas.drawText(label, x, y + 9f, textPaint)
+    fun draw(c: Canvas, forceVisible: Boolean = false, selectedInEditor: Boolean = false) {
+        if (!visible && !forceVisible) return
+        val u = Ui.u
+        val rr = if (isPressed) r * 0.92f else r
+        val baseDim = if (enabled || forceVisible) (255 * customAlpha).toInt().coerceIn(70, 255) else (120 * customAlpha).toInt().coerceIn(50, 180)
+        Ui.circle(c, cx + 2f * u, cy + 4f * u, rr, Color.argb((90 * customAlpha).toInt(), 0, 0, 0))
+        Ui.circle(c, cx, cy, rr, Color.argb((215 * customAlpha).toInt(), 20, 22, 30))
+        Ui.circle(c, cx, cy, rr * 0.86f, Ui.withAlpha(accent, if (isPressed) 135 else (65 * customAlpha).toInt()))
+        Ui.ring(c, cx, cy, rr - 2f * u, if (selectedInEditor) Color.parseColor("#FFD54F") else Ui.withAlpha(accent, baseDim), if (selectedInEditor) 5.5f * u else 3.8f * u)
+        val iconSize = rr * 1.05f / u
+        Ui.icon(c, iconPath, cx, cy - rr * 0.10f, iconSize, tintIcon, baseDim)
+        if (label.isNotEmpty()) {
+            Ui.text(c, label, cx, cy + rr * 0.72f, 11.2f * customScale.coerceIn(0.85f, 1.25f), Color.argb(baseDim, 255, 255, 255))
+        }
+        if (cooldown > 0.01f && !forceVisible) {
+            Ui.pie(c, cx, cy, rr - 3f * u, 360f * cooldown.coerceIn(0f, 1f), Color.argb(165, 0, 0, 0))
+        }
+        val b = badge
+        if (b != null) {
+            val bx = cx + rr * 0.72f
+            val by = cy - rr * 0.72f
+            Ui.circle(c, bx, by, 13f * u, Color.argb(240, 14, 16, 24))
+            Ui.ring(c, bx, by, 13f * u, accent, 2f * u)
+            Ui.text(c, b, bx, by + 5f * u, 12.5f, Color.WHITE)
         }
     }
 }
