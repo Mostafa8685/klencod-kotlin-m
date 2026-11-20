@@ -1,32 +1,30 @@
 package com.apk3rade.mangoide
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
-import androidx.core.view.GravityCompat
-import androidx.drawerlayout.widget.DrawerLayout
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONObject
 import java.io.File
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
 
     private lateinit var prefs: AppPrefs
     private lateinit var projectManager: ProjectManager
-    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var drawerOverlay: FrameLayout
     private lateinit var webView: WebView
     private lateinit var tvProjectTitle: TextView
     private lateinit var tvActiveFile: TextView
@@ -45,24 +43,28 @@ class MainActivity : AppCompatActivity() {
         prefs = AppPrefs(this)
         projectManager = ProjectManager(this)
 
-        drawerLayout = findViewById(R.id.drawerLayout)
+        drawerOverlay = findViewById(R.id.drawerOverlay)
         webView = findViewById(R.id.editorWebView)
         tvProjectTitle = findViewById(R.id.tvProjectTitle)
         tvActiveFile = findViewById(R.id.tvActiveFile)
         tvStatus = findViewById(R.id.tvStatus)
 
-        val rvTree: RecyclerView = findViewById(R.id.rvFileTree)
-        rvTree.layoutManager = LinearLayoutManager(this)
-        adapter = FileTreeAdapter(
-            onSelect = { node ->
-                if (!node.isDirectory) {
-                    openFile(node.file)
-                    drawerLayout.closeDrawer(GravityCompat.START)
-                }
-            },
-            onLongPress = { node -> showNodeActions(node) }
-        )
-        rvTree.adapter = adapter
+        val lvTree: ListView = findViewById(R.id.lvFileTree)
+        adapter = FileTreeAdapter(this)
+        lvTree.adapter = adapter
+        lvTree.setOnItemClickListener { _, _, position, _ ->
+            val node = adapter.getItem(position)
+            if (!node.isDirectory) {
+                openFile(node.file)
+                drawerOverlay.visibility = View.GONE
+            }
+        }
+        lvTree.setOnItemLongClickListener { _, _, position, _ ->
+            showNodeActions(adapter.getItem(position))
+            true
+        }
+
+        drawerOverlay.setOnClickListener { drawerOverlay.visibility = View.GONE }
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -70,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("file:///android_asset/editor/index.html")
 
         findViewById<ImageButton>(R.id.btnMenu).setOnClickListener {
-            drawerLayout.openDrawer(GravityCompat.START)
+            drawerOverlay.visibility = View.VISIBLE
         }
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { saveCurrentFile(true) }
         findViewById<ImageButton>(R.id.btnPreview).setOnClickListener { previewHtmlIfPossible() }
@@ -94,6 +96,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<LinearLayout>(R.id.cardTelegramDrawer).setOnClickListener { openTelegramChannel() }
         findViewById<TextView>(R.id.tvChannelQuick).setOnClickListener { openTelegramChannel() }
         findViewById<LinearLayout>(R.id.btnOpenSettings).setOnClickListener {
+            drawerOverlay.visibility = View.GONE
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
@@ -104,6 +107,15 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         loadActiveProject()
         webView.evaluateJavascript("if(window.MangoEditor) window.MangoEditor.setFontSize(${prefs.fontSize});", null)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (drawerOverlay.visibility == View.VISIBLE) {
+            drawerOverlay.visibility = View.GONE
+        } else {
+            super.onBackPressed()
+        }
     }
 
     private fun loadActiveProject() {
@@ -181,9 +193,10 @@ class MainActivity : AppCompatActivity() {
                 prefs.activeProject = projects[which].name
                 currentFile = null
                 loadActiveProject()
-                drawerLayout.closeDrawer(GravityCompat.START)
+                drawerOverlay.visibility = View.GONE
             }
             .setPositiveButton("قالب جديد") { _, _ ->
+                drawerOverlay.visibility = View.GONE
                 startActivity(Intent(this, TemplatesActivity::class.java))
             }
             .show()
@@ -227,13 +240,7 @@ class MainActivity : AppCompatActivity() {
         saveCurrentFile(false)
         runCatching {
             val zip = projectManager.exportProjectZip(proj)
-            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", zip)
-            val share = Intent(Intent.ACTION_SEND).apply {
-                type = "application/zip"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(Intent.createChooser(share, "تصدير المشروع"))
+            Toast.makeText(this, "تم التصدير إلى: ${zip.absolutePath}", Toast.LENGTH_LONG).show()
         }.onFailure {
             Toast.makeText(this, "تعذر التصدير: ${it.message}", Toast.LENGTH_SHORT).show()
         }

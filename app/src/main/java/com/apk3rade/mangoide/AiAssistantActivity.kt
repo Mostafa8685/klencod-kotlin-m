@@ -1,5 +1,6 @@
 package com.apk3rade.mangoide
 
+import android.app.Activity
 import android.os.Bundle
 import android.widget.Button
 import android.widget.CheckBox
@@ -7,13 +8,11 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.util.concurrent.Executors
 
-class AiAssistantActivity : AppCompatActivity() {
+class AiAssistantActivity : Activity() {
+
+    private val executor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,12 +38,12 @@ class AiAssistantActivity : AppCompatActivity() {
             scrollChat.post { scrollChat.fullScroll(ScrollView.FOCUS_DOWN) }
 
             val ctx = if (cbInclude.isChecked) activeCode else null
-            CoroutineScope(Dispatchers.IO).launch {
+            executor.execute {
                 val reply = runCatching {
                     AiClient(prefs.aiBaseUrl, prefs.aiApiKey, prefs.aiModel).ask(prompt, ctx)
                 }.getOrElse { "حدث خطأ في الاتصال: ${it.message}" }
 
-                withContext(Dispatchers.Main) {
+                runOnUiThread {
                     tvHistory.append("\n$reply")
                     btnSend.isEnabled = true
                     scrollChat.post { scrollChat.fullScroll(ScrollView.FOCUS_DOWN) }

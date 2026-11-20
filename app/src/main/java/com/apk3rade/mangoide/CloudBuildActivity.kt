@@ -1,21 +1,19 @@
 package com.apk3rade.mangoide
 
+import android.app.Activity
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.util.concurrent.Executors
 
-class CloudBuildActivity : AppCompatActivity() {
+class CloudBuildActivity : Activity() {
 
     private lateinit var prefs: AppPrefs
     private lateinit var projectManager: ProjectManager
     private lateinit var tvLog: TextView
+    private val executor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,7 +49,7 @@ class CloudBuildActivity : AppCompatActivity() {
             val projectDir = projectManager.getProjectDir(projectName)
             tvLog.text = "جارٍ مزامنة المشروع ${projectDir.name} مع GitHub..."
 
-            CoroutineScope(Dispatchers.IO).launch {
+            executor.execute {
                 val client = GitHubCloudClient(token, repo, branch)
                 val ok = client.syncProject(projectDir) { line ->
                     runOnUiThread { tvLog.append("\n$line") }
@@ -61,7 +59,7 @@ class CloudBuildActivity : AppCompatActivity() {
                 } else {
                     "\nتوقفت عملية الرفع بسبب خطأ."
                 }
-                withContext(Dispatchers.Main) { tvLog.append(summary) }
+                runOnUiThread { tvLog.append(summary) }
             }
         }
 
@@ -74,9 +72,9 @@ class CloudBuildActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             tvLog.text = "جارٍ التحقق من حالة آخر بناء سحابي..."
-            CoroutineScope(Dispatchers.IO).launch {
+            executor.execute {
                 val status = GitHubCloudClient(token, repo, branch).fetchLatestRunSummary()
-                withContext(Dispatchers.Main) { tvLog.text = status }
+                runOnUiThread { tvLog.text = status }
             }
         }
     }

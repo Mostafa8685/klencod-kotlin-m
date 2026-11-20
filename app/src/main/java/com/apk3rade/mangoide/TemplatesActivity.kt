@@ -1,5 +1,7 @@
 package com.apk3rade.mangoide
 
+import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -7,10 +9,8 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 
-class TemplatesActivity : AppCompatActivity() {
+class TemplatesActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +46,9 @@ class TemplatesActivity : AppCompatActivity() {
             }
             val btn = Button(this).apply {
                 text = "إنشاء مشروع من هذا القالب"
+                isAllCaps = false
+                setBackgroundResource(R.drawable.bg_btn_primary)
+                setTextColor(0xFF0B1120.toInt())
                 setOnClickListener {
                     val input = EditText(this@TemplatesActivity).apply {
                         setText(tpl.defaultProjectName)

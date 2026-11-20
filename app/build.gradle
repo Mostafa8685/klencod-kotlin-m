@@ -3,27 +3,48 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+def activeKotlinFiles = [
+    'MainActivity.kt',
+    'CloudBuildActivity.kt',
+    'AiAssistantActivity.kt',
+    'TemplatesActivity.kt',
+    'SettingsActivity.kt',
+    'ProjectManager.kt',
+    'ProjectTemplates.kt',
+    'FileTreeAdapter.kt',
+    'GitHubCloudClient.kt',
+    'AiClient.kt',
+    'AppPrefs.kt'
+] as Set
+
+tasks.register('cleanLegacyFiles') {
+    doLast {
+        def srcDir = file('src/main/java/com/apk3rade/mangoide')
+        if (srcDir.exists()) {
+            srcDir.listFiles()?.each { f ->
+                if (f.isFile() && f.name.endsWith('.kt') && !activeKotlinFiles.contains(f.name)) {
+                    f.delete()
+                }
+            }
+        }
+    }
+}
+
+preBuild.dependsOn('cleanLegacyFiles')
+
 android {
-    namespace "com.m3rd.app"
+    namespace 'com.apk3rade.mangoide'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.mangodrive.unlim"
+        applicationId 'com.apk3rade.mangoide'
         minSdk 24
         targetSdk 34
-        versionCode 7
-        versionName "7.0-Native-TDLib"
-    }
-
-    buildFeatures {
-        buildConfig true
+        versionCode 1
+        versionName '1.0.0'
     }
 
     buildTypes {
-        debug {
-            minifyEnabled false
-            applicationIdSuffix ""
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -38,35 +59,8 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
-
-    sourceSets {
-        main {
-            java {
-                srcDirs = ['src/main/java']
-                exclude 'com/arabunlim/**'
-            }
-            res.srcDirs = ['src/main/res']
-            assets.srcDirs = ['src/main/assets']
-        }
-    }
-
-    packagingOptions {
-        pickFirst 'lib/arm64-v8a/libtdjni.so'
-        pickFirst 'lib/armeabi-v7a/libtdjni.so'
-        pickFirst 'lib/x86_64/libtdjni.so'
-        pickFirst 'lib/x86/libtdjni.so'
-    }
-}
-
-preBuild.doFirst {
-    delete fileTree("src/main/java/com/arabunlim")
-    delete file("build.gradle.kts")
-    delete file("../build.gradle.kts")
-    delete file("../settings.gradle.kts")
 }
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
-    // مكتبة TDLib الأصلية المترجمة للأندرويد (Native C++ libtdjni.so + Client + TdApi)
-    implementation 'com.github.tdlibx:td:1.8.56'
+    // Pure Android SDK + Kotlin stdlib: zero third-party UI dependency conflicts
 }

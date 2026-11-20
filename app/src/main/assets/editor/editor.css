@@ -5,9 +5,7 @@ html, body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
-#editor-wrap {
-  flex: 1; display: flex; position: relative; overflow: hidden;
-}
+#editor-wrap { flex: 1; display: flex; position: relative; overflow: hidden; }
 #gutter {
   width: 44px; background: #0F172A; color: #64748B;
   border-right: 1px solid #1E293B;
@@ -15,21 +13,15 @@ html, body {
   font-size: 14px; line-height: 1.55; white-space: pre;
   overflow: hidden; user-select: none; flex-shrink: 0;
 }
-#code-layer {
-  flex: 1; position: relative; overflow: hidden;
-}
+#code-layer { flex: 1; position: relative; overflow: hidden; }
 #highlight, #code-input {
   position: absolute; inset: 0; width: 100%; height: 100%;
   padding: 12px; font-family: inherit; font-size: 14px; line-height: 1.55;
   tab-size: 4; white-space: pre; overflow: auto;
   border: 0; outline: none; resize: none;
 }
-#highlight {
-  pointer-events: none; color: #E2E8F0; background: transparent;
-}
-#code-input {
-  background: transparent; color: transparent; caret-color: #F59E0B;
-}
+#highlight { pointer-events: none; color: #E2E8F0; background: transparent; }
+#code-input { background: transparent; color: transparent; caret-color: #F59E0B; }
 .tok-kw { color: #F59E0B; font-weight: 600; }
 .tok-str { color: #34D399; }
 .tok-num { color: #38BDF8; }
@@ -37,8 +29,7 @@ html, body {
 .tok-tag { color: #FB7185; }
 #symbol-bar {
   display: flex; overflow-x: auto; gap: 6px; padding: 6px 8px;
-  background: #111827; border-top: 1px solid #1E293B;
-  flex-shrink: 0;
+  background: #111827; border-top: 1px solid #1E293B; flex-shrink: 0;
 }
 #symbol-bar button {
   background: #1E293B; color: #F8FAFC; border: 1px solid #334155;

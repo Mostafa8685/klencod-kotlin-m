@@ -67,7 +67,7 @@ class ProjectManager(private val context: Context) {
     }
 
     fun exportProjectZip(projectDir: File): File {
-        val exportDir = File(context.cacheDir, "exports").apply { mkdirs() }
+        val exportDir = File(context.getExternalFilesDir("Exports") ?: context.filesDir, "").apply { mkdirs() }
         val zipFile = File(exportDir, "${projectDir.name}.zip")
         ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
             projectDir.walkTopDown().filter { it.isFile }.forEach { file ->

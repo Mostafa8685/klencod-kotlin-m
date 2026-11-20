@@ -5,21 +5,12 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
-
-plugins {
-    id 'com.android.application' version '8.5.2' apply false
-    id 'com.android.library' version '8.5.2' apply false
-    id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
-}
-
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://jitpack.io' }
     }
 }
-
-rootProject.name = "app"
-include ":app"
+rootProject.name = "MangoIDE"
+include ':app'

@@ -1,16 +1,14 @@
 package com.apk3rade.mangoide
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.BaseAdapter
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.recyclerview.widget.RecyclerView
 
-class FileTreeAdapter(
-    private val onSelect: (FileNode) -> Unit,
-    private val onLongPress: (FileNode) -> Unit
-) : RecyclerView.Adapter<FileTreeAdapter.NodeVH>() {
+class FileTreeAdapter(private val context: Context) : BaseAdapter() {
 
     private var items: List<FileNode> = emptyList()
 
@@ -19,28 +17,21 @@ class FileTreeAdapter(
         notifyDataSetChanged()
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): NodeVH {
-        val v = LayoutInflater.from(parent.context).inflate(R.layout.item_file_node, parent, false)
-        return NodeVH(v)
-    }
+    override fun getCount(): Int = items.size
 
-    override fun getItemCount(): Int = items.size
+    override fun getItem(position: Int): FileNode = items[position]
 
-    override fun onBindViewHolder(holder: NodeVH, position: Int) {
+    override fun getItemId(position: Int): Long = position.toLong()
+
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+        val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_file_node, parent, false)
         val node = items[position]
-        val padStart = (8 + node.depth * 14) * holder.itemView.resources.displayMetrics.density
-        holder.itemView.setPaddingRelative(padStart.toInt(), 0, 8, 0)
-        holder.tvName.text = node.file.name
-        holder.ivIcon.setImageResource(if (node.isDirectory) R.drawable.ic_folder else R.drawable.ic_file)
-        holder.itemView.setOnClickListener { onSelect(node) }
-        holder.itemView.setOnLongClickListener {
-            onLongPress(node)
-            true
-        }
-    }
-
-    class NodeVH(view: View) : RecyclerView.ViewHolder(view) {
-        val ivIcon: ImageView = view.findViewById(R.id.ivNodeIcon)
-        val tvName: TextView = view.findViewById(R.id.tvNodeName)
+        val padStart = ((8 + node.depth * 14) * context.resources.displayMetrics.density).toInt()
+        view.setPaddingRelative(padStart, 0, 8, 0)
+        view.findViewById<ImageView>(R.id.ivNodeIcon).setImageResource(
+            if (node.isDirectory) R.drawable.ic_folder else R.drawable.ic_file
+        )
+        view.findViewById<TextView>(R.id.tvNodeName).text = node.file.name
+        return view
     }
 }

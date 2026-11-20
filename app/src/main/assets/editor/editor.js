@@ -11,7 +11,7 @@
     'for','while','return','true','false','null','override','private','public','internal',
     'protected','suspend','data','sealed','enum','companion','try','catch','finally','throw',
     'void','int','boolean','String','final','static','extends','implements','new','this',
-    'function','const','let','async','await','export','default','from','class','widget',
+    'function','const','let','async','await','export','default','from','widget',
     'BuildContext','Widget','StatelessWidget','StatefulWidget','State','plugins','dependencies'
   ]);
 
