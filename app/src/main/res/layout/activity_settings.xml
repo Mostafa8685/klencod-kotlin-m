@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:background="@color/bg_surface"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="10dp">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="رجوع"
+            android:src="@drawable/ic_back" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="8dp"
+            android:text="الإعدادات وقناة Apk3rade"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="14dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Apk3rade Official Brand Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_telegram_banner"
+                android:gravity="center_vertical"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:contentDescription="Mango IDE"
+                        android:src="@drawable/mango_ide_logo" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:paddingStart="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Mango IDE — إصدار 1.0.0"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="الحزمة: com.apk3rade.mangoide"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/channel_banner_sub"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnOpenTelegram"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:backgroundTint="@color/telegram_blue"
+                    android:text="فتح قناة تليجرام @apk3rade"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <!-- Editor Settings -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="إعدادات المحرر"
+                android:textColor="@color/mango_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="حجم الخط (px)"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/etFontSize"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="14dp"
+                android:background="@drawable/bg_card_rounded"
+                android:inputType="number"
+                android:paddingHorizontal="12dp"
+                android:text="14"
+                android:textColor="@color/text_primary" />
+
+            <!-- AI Settings -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="إعدادات مساعد الذكاء الاصطناعي (متوافق مع OpenAI)"
+                android:textColor="@color/mango_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="رابط الـ API (Base URL)"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/etAiBaseUrl"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_card_rounded"
+                android:hint="https://api.openai.com/v1/chat/completions"
+                android:inputType="textUri"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="مفتاح API Key"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/etAiApiKey"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_card_rounded"
+                android:hint="sk-..."
+                android:inputType="textPassword"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="اسم النموذج (Model)"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/etAiModel"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_card_rounded"
+                android:hint="gpt-4o-mini"
+                android:inputType="text"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnSaveSettings"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="حفظ الإعدادات" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

@@ -1,5 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">حرب الفارس</string>
-    <string name="widget_photo_desc">حرب الفارس</string>
-    <string name="widget_quick_desc">حرب الفارس - تشغيل سريع</string>
+    <string name="app_name">Mango IDE</string>
+    <string name="title_cloud_build">البناء السحابي</string>
+    <string name="title_ai_assistant">مساعد الذكاء الاصطناعي</string>
+    <string name="title_templates">قوالب المشاريع</string>
+    <string name="title_settings">الإعدادات وقناة Apk3rade</string>
+    <string name="telegram_handle">@apk3rade</string>
+    <string name="telegram_url">https://t.me/apk3rade</string>
+    <string name="channel_banner_title">قناة Apk3rade الرسمية</string>
+    <string name="channel_banner_sub">انضم لمتابعة تحديثات Mango IDE والمشاريع (@apk3rade)</string>
 </resources>

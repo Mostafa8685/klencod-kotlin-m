@@ -3,26 +3,55 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.FullScreen">
+        android:theme="@style/Theme.MangoIDE"
+        android:usesCleartextTraffic="true">
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <activity
-            android:name="com.clashangprpr.app.MainActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="sensorLandscape"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+        <activity
+            android:name=".CloudBuildActivity"
+            android:exported="false"
+            android:label="@string/title_cloud_build" />
+
+        <activity
+            android:name=".AiAssistantActivity"
+            android:exported="false"
+            android:label="@string/title_ai_assistant"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".TemplatesActivity"
+            android:exported="false"
+            android:label="@string/title_templates" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/title_settings" />
+    </application>
 </manifest>

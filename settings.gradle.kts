@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "KnightWar"
+rootProject.name = "MangoIDE"
 include(":app")
